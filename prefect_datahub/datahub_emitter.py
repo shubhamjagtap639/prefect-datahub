@@ -102,7 +102,7 @@ class DatahubEmitter(Block):
 
             datajob.description = task_run_ctx.task.description
             datajob.tags = task_run_ctx.task.tags
-            job_property_bag: Dict[str, str] = {}            
+            job_property_bag: Dict[str, str] = {}
 
             allowed_task_keys = [
                 "version",
@@ -117,7 +117,10 @@ class DatahubEmitter(Block):
                 "on_failure",
             ]
             for key in allowed_task_keys:
-                if hasattr(task_run_ctx.task, key) and getattr(task_run_ctx.task, key) is not None:
+                if (
+                    hasattr(task_run_ctx.task, key)
+                    and getattr(task_run_ctx.task, key) is not None
+                ):
                     job_property_bag[key] = repr(getattr(task_run_ctx.task, key))
             datajob.properties = job_property_bag
             return datajob
@@ -130,7 +133,9 @@ class DatahubEmitter(Block):
         return None
 
     def generate_dataflow(self, flow_run_ctx: FlowRunContext) -> DataFlow:
-        flow = asyncio.run(get_client().read_flow(flow_id=flow_run_ctx.flow_run.flow_id))
+        flow = asyncio.run(
+            get_client().read_flow(flow_id=flow_run_ctx.flow_run.flow_id)
+        )
         dataflow = DataFlow(
             orchestrator="prefect",
             id=flow_run_ctx.flow.name,
@@ -141,9 +146,9 @@ class DatahubEmitter(Block):
         dataflow.description = flow_run_ctx.flow.description
         dataflow.tags = flow.tags
         flow_property_bag: Dict[str, str] = {}
-        flow_property_bag['id'] = str(flow.id)
-        flow_property_bag['created'] = str(flow.created)
-        flow_property_bag['updated'] = str(flow.updated)
+        flow_property_bag["id"] = str(flow.id)
+        flow_property_bag["created"] = str(flow.created)
+        flow_property_bag["updated"] = str(flow.updated)
 
         allowed_flow_keys = [
             "version",
@@ -159,14 +164,19 @@ class DatahubEmitter(Block):
             "on_crashed",
         ]
         for key in allowed_flow_keys:
-            if hasattr(flow_run_ctx.flow, key) and getattr(flow_run_ctx.flow, key) is not None:
+            if (
+                hasattr(flow_run_ctx.flow, key)
+                and getattr(flow_run_ctx.flow, key) is not None
+            ):
                 flow_property_bag[key] = repr(getattr(flow_run_ctx.flow, key))
         dataflow.properties = flow_property_bag
-        
+
         return dataflow
 
     def run_dataflow(self, dataflow: DataFlow, flow_run_ctx: FlowRunContext) -> None:
-        flow_run = asyncio.run(get_client().read_flow_run(flow_run_id=flow_run_ctx.flow_run.id))
+        flow_run = asyncio.run(
+            get_client().read_flow_run(flow_run_id=flow_run_ctx.flow_run.id)
+        )
         dpi = DataProcessInstance.from_dataflow(
             dataflow=dataflow, id=flow_run_ctx.flow_run.name
         )
@@ -179,12 +189,14 @@ class DatahubEmitter(Block):
         dpi_property_bag["estimated_run_time"] = str(flow_run.estimated_run_time)
         dpi_property_bag["start_time"] = str(flow_run.start_time)
         dpi_property_bag["total_run_time"] = str(flow_run.total_run_time)
-        dpi_property_bag["next_scheduled_start_time"] = str(flow_run.next_scheduled_start_time)
+        dpi_property_bag["next_scheduled_start_time"] = str(
+            flow_run.next_scheduled_start_time
+        )
         dpi_property_bag["tags"] = str(flow_run.tags)
         dpi_property_bag["updated"] = str(flow_run.updated)
         dpi_property_bag["run_count"] = str(flow_run.run_count)
         dpi.properties.update(dpi_property_bag)
-        
+
         dpi.emit_process_start(
             emitter=self.emitter,
             start_timestamp_millis=int(
@@ -201,7 +213,7 @@ class DatahubEmitter(Block):
             clone_inlets=True,
             clone_outlets=True,
         )
-        
+
         dpi_property_bag: Dict[str, str] = {}
         dpi_property_bag["id"] = str(task_run.id)
         dpi_property_bag["flow_run_id"] = str(task_run.flow_run_id)
@@ -211,12 +223,14 @@ class DatahubEmitter(Block):
         dpi_property_bag["start_time"] = str(task_run.start_time)
         dpi_property_bag["end_time"] = str(task_run.end_time)
         dpi_property_bag["total_run_time"] = str(task_run.total_run_time)
-        dpi_property_bag["next_scheduled_start_time"] = str(task_run.next_scheduled_start_time)
+        dpi_property_bag["next_scheduled_start_time"] = str(
+            task_run.next_scheduled_start_time
+        )
         dpi_property_bag["tags"] = str(task_run.tags)
         dpi_property_bag["updated"] = str(task_run.updated)
         dpi_property_bag["run_count"] = str(task_run.run_count)
         dpi.properties.update(dpi_property_bag)
-        
+
         if task_run.state_name == "Completed":
             result = InstanceRunResult.SUCCESS
         elif task_run.state_name == "Failed":
@@ -227,13 +241,13 @@ class DatahubEmitter(Block):
             raise Exception(
                 f"Result should be either success or failure and it was {task_run.state_name}"
             )
-        
+
         dpi.emit_process_start(
             emitter=self.emitter,
             start_timestamp_millis=int(task_run.start_time.timestamp() * 1000),
             emit_template=False,
         )
-        
+
         dpi.emit_process_end(
             emitter=self.emitter,
             end_timestamp_millis=int(task_run.end_time.timestamp() * 1000),
@@ -245,7 +259,9 @@ class DatahubEmitter(Block):
         try:
             asyncio.run(get_cloud_client().api_healthcheck())
         except Exception as e:
-            get_run_logger().info("Cannot emit workspaces. Please set correct 'PREFECT_API_KEY'.")
+            get_run_logger().info(
+                "Cannot emit workspaces. Please set correct 'PREFECT_API_KEY'."
+            )
             return
 
         workspaces = asyncio.run(get_cloud_client().read_workspaces())
