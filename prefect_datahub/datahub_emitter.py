@@ -1,23 +1,31 @@
 """Module for emit metadata to Datahub REST. """
 
 import asyncio
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from datahub.api.entities.datajob import DataFlow, DataJob
 from datahub.api.entities.dataprocess.dataprocess_instance import (
     DataProcessInstance,
     InstanceRunResult,
 )
+from datahub.emitter.mce_builder import make_user_urn
+from datahub.emitter.mcp_builder import PlatformKey, gen_containers
 from datahub.emitter.rest_emitter import DatahubRestEmitter
 from datahub.utilities.urns.data_flow_urn import DataFlowUrn
 from datahub.utilities.urns.data_job_urn import DataJobUrn
 from datahub.utilities.urns.dataset_urn import DatasetUrn
 from datahub_provider.entities import _Entity
+from prefect import get_run_logger
 from prefect.blocks.core import Block
 from prefect.client.cloud import get_cloud_client
 from prefect.client.orchestration import get_client
+from prefect.client.schemas import TaskRun
 from prefect.context import FlowRunContext, TaskRunContext
 from pydantic import Field
+
+
+class WorkspaceKey(PlatformKey):
+    workspace_name: str
 
 
 class DatahubEmitter(Block):
@@ -48,89 +56,89 @@ class DatahubEmitter(Block):
         description="Datahub gms rest url.",
     )
 
-    cluster: Optional[str] = Field(
+    env: Optional[str] = Field(
         default="prod",
-        title="Cluster",
-        description="Name of the prefect cluster.",
+        title="Environment",
+        description="Name of the prefect environment.",
     )
 
-    capture_tags_info: Optional[bool] = Field(
-        default=True,
-        title="Capture tags info",
-        description="If true, the tags field of the task and flow will be captured as DataHub tags.",
-    )
-
-    graceful_exceptions: Optional[bool] = Field(
-        default=True,
-        title="Graceful Exceptions",
-        description="If set to true, most runtime errors in the emit task or flow will be suppressed and will not cause the overall flow to fail. Note that configuration issues will still throw exceptions..",
+    platform_instance: Optional[str] = Field(
+        default=None,
+        title="Platform instance",
+        description="Name of the prefect platform instance.",
     )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.datajob_to_emit = {}
         self.emitter = DatahubRestEmitter(gms_server=self.datahub_rest_url)
         self.emitter.test_connection()
-        self.prefect_client = get_client()
-        self.prefect_cloud_client = get_cloud_client()
+        asyncio.run(get_client().api_healthcheck())
 
     def _entities_to_urn_list(self, iolets: List[_Entity]) -> List[DatasetUrn]:
         return [DatasetUrn.create_from_string(let.urn) for let in iolets]
 
-    def emit_task(self, inputs: List = None, outputs: List = None):
-        flow_run_ctx = FlowRunContext.get()
-        task_run_ctx = TaskRunContext.get()
+    async def _get_flow_run_graph(self, flow_run_id):
+        response = await get_client()._client.get(f"/flow_runs/{flow_run_id}/graph")
+        return response.json()
 
-        if flow_run_ctx is None or task_run_ctx is None:
-            return
-
+    def generate_datajob(
+        self,
+        flow_run_ctx: FlowRunContext,
+        task_run_ctx: TaskRunContext = None,
+        task_key: str = None,
+    ) -> Optional[DataJob]:
         dataflow_urn = DataFlowUrn.create_from_ids(
-            orchestrator="prefect", env=self.cluster, flow_id=flow_run_ctx.flow.name
+            orchestrator="prefect",
+            flow_id=flow_run_ctx.flow.name,
+            env=self.env,
+            platform_instance=self.platform_instance,
         )
+        if task_run_ctx is not None:
+            datajob = DataJob(
+                id=task_run_ctx.task.task_key,
+                flow_urn=dataflow_urn,
+                name=task_run_ctx.task.name,
+            )
 
-        datajob = DataJob(
-            id=task_run_ctx.task.task_key,
-            flow_urn=dataflow_urn,
-            name=task_run_ctx.task.name,
-        )
-        datajob.description = task_run_ctx.task.description
-        datajob.tags = task_run_ctx.task.tags
-        if inputs is not None:
-            datajob.inlets.extend(self._entities_to_urn_list(inputs))
-        if outputs is not None:
-            datajob.outlets.extend(self._entities_to_urn_list(outputs))
+            datajob.description = task_run_ctx.task.description
+            datajob.tags = task_run_ctx.task.tags
+            job_property_bag: Dict[str, str] = {}
 
-        # Add upstrem urns
-        if task_run_ctx.task_run.task_inputs:
-            task_run_key_map = {
-                str(prefect_future.task_run.id): prefect_future.task_run.task_key
-                for prefect_future in flow_run_ctx.task_run_futures
-            }
-            for key in task_run_ctx.task_run.task_inputs.keys():
-                upstream_task_urn = DataJobUrn.create_from_ids(
-                    data_flow_urn=str(dataflow_urn),
-                    job_id=task_run_key_map[
-                        str(task_run_ctx.task_run.task_inputs[key][0].id)
-                    ],
-                )
-                datajob.upstream_urns.extend([upstream_task_urn])
-        datajob.emit(self.emitter)
+            allowed_task_keys = [
+                "cache_result_in_memory",
+                "isasync",
+                "retries",
+                "_is_protocol",
+                "task_key",
+            ]
+            for key in allowed_task_keys:
+                if hasattr(task_run_ctx.task, key):
+                    job_property_bag[key] = repr(getattr(task_run_ctx.task, key))
+            datajob.properties = job_property_bag
+            return datajob
+        elif task_key is not None:
+            datajob = DataJob(
+                id=task_key,
+                flow_urn=dataflow_urn,
+            )
+            return datajob
+        return None
 
-    def emit_flow(self):
-        flow_run_ctx = FlowRunContext.get()
-
-        if flow_run_ctx is None:
-            return
-
+    def generate_dataflow(self, flow_run_ctx: FlowRunContext) -> DataFlow:
         dataflow = DataFlow(
-            cluster=self.cluster, id=flow_run_ctx.flow.name, orchestrator="prefect"
+            orchestrator="prefect",
+            id=flow_run_ctx.flow.name,
+            env=self.env,
+            platform_instance=self.platform_instance,
         )
         dataflow.description = flow_run_ctx.flow.description
-        dataflow.emit(self.emitter)
+        return dataflow
 
+    def run_dataflow(self, dataflow: DataFlow, flow_run_ctx: FlowRunContext) -> None:
         dpi = DataProcessInstance.from_dataflow(
             dataflow=dataflow, id=flow_run_ctx.flow_run.name
         )
-
         dpi.emit_process_start(
             emitter=self.emitter,
             start_timestamp_millis=int(
@@ -138,47 +146,118 @@ class DatahubEmitter(Block):
             ),
         )
 
+    def run_datajob(
+        self, datajob: DataJob, flow_run_name: str, task_run: TaskRun
+    ) -> None:
+        if task_run.state_name == "Completed":
+            result = InstanceRunResult.SUCCESS
+        elif task_run.state_name == "Failed":
+            result = InstanceRunResult.FAILURE
+        elif task_run.state_name == "Cancelled":
+            result = InstanceRunResult.SKIPPED
+        else:
+            raise Exception(
+                f"Result should be either success or failure and it was {task_run.state_name}"
+            )
+        dpi = DataProcessInstance.from_datajob(
+            datajob=datajob,
+            id=f"{flow_run_name}.{task_run.name}",
+            clone_inlets=True,
+            clone_outlets=True,
+        )
+        dpi.emit_process_start(
+            emitter=self.emitter,
+            start_timestamp_millis=int(task_run.start_time.timestamp() * 1000),
+            emit_template=False,
+        )
         dpi.emit_process_end(
             emitter=self.emitter,
-            end_timestamp_millis=int(
-                flow_run_ctx.flow_run.start_time.timestamp() * 1000
-            )
-            + 5000,
-            result=InstanceRunResult.SUCCESS,
+            end_timestamp_millis=int(task_run.end_time.timestamp() * 1000),
+            result=result,
             result_type="prefect",
         )
 
-        for prefect_future in flow_run_ctx.task_run_futures:
-            task_run = asyncio.run(
-                self.prefect_client.read_task_run(prefect_future.task_run.id)
-            )
-            datajob = DataJob(id=task_run.task_key, flow_urn=dataflow.urn)
+    def emit_workspaces(self) -> None:
+        try:
+            asyncio.run(get_cloud_client().api_healthcheck())
+        except Exception as e:
+            get_run_logger().debug(str(e))
+            return
 
-            if task_run.state_name == "Completed":
-                result = InstanceRunResult.SUCCESS
-            elif task_run.state_name == "Failed":
-                result = InstanceRunResult.FAILURE
-            elif task_run.state_name == "Cancelled":
-                result = InstanceRunResult.SKIPPED
+        workspaces = asyncio.run(get_cloud_client().read_workspaces())
+        for workspace in workspaces:
+            container_key = WorkspaceKey(
+                workspace_name=workspace.workspace_name,
+                platform="prefect",
+                instance=self.platform_instance,
+                env=self.env,
+            )
+            container_work_units = gen_containers(
+                container_key=container_key,
+                name=workspace.workspace_name,
+                sub_types=["Workspace"],
+                description=workspace.workspace_description,
+                owner_urn=make_user_urn(workspace.account_name),
+            )
+            for workunit in container_work_units:
+                self.emitter.emit(workunit.metadata)
+
+    def emit_task(self, inputs: List = None, outputs: List = None):
+        flow_run_ctx = FlowRunContext.get()
+        task_run_ctx = TaskRunContext.get()
+        assert flow_run_ctx
+        assert task_run_ctx
+
+        datajob = self.generate_datajob(
+            flow_run_ctx=flow_run_ctx, task_run_ctx=task_run_ctx
+        )
+        if inputs is not None:
+            datajob.inlets.extend(self._entities_to_urn_list(inputs))
+        if outputs is not None:
+            datajob.outlets.extend(self._entities_to_urn_list(outputs))
+        self.datajob_to_emit[str(datajob.urn)] = datajob
+
+    def emit_flow(self):
+        flow_run_ctx = FlowRunContext.get()
+        assert flow_run_ctx
+        # Emit flow
+        dataflow = self.generate_dataflow(flow_run_ctx=flow_run_ctx)
+        dataflow.emit(self.emitter)
+
+        # Emit task, task run and add upstream task if present for each task
+        graph_json = asyncio.run(
+            self._get_flow_run_graph(str(flow_run_ctx.flow_run.id))
+        )
+        task_run_key_map = {
+            str(prefect_future.task_run.id): prefect_future.task_run.task_key
+            for prefect_future in flow_run_ctx.task_run_futures
+        }
+        for node in graph_json:
+            task_run = asyncio.run(get_client().read_task_run(node["id"]))
+            # Emit task
+            datajob_urn = DataJobUrn.create_from_ids(
+                data_flow_urn=str(dataflow.urn),
+                job_id=task_run.task_key,
+            )
+            if str(datajob_urn) in self.datajob_to_emit:
+                datajob = self.datajob_to_emit[str(datajob_urn)]
             else:
-                raise Exception(
-                    f"Result should be either success or failure and it was {task_run.state_name}"
+                datajob = self.generate_datajob(
+                    flow_run_ctx=flow_run_ctx, task_key=task_run.task_key
                 )
+            # Add upstrem urns
+            for each in node["upstream_dependencies"]:
+                upstream_task_urn = DataJobUrn.create_from_ids(
+                    data_flow_urn=str(dataflow.urn),
+                    job_id=task_run_key_map[each["id"]],
+                )
+                datajob.upstream_urns.extend([upstream_task_urn])
+            datajob.emit(self.emitter)
 
-            dpi = DataProcessInstance.from_datajob(
+            self.run_datajob(
                 datajob=datajob,
-                id=f"{flow_run_ctx.flow_run.name}.{task_run.name}",
-                clone_inlets=True,
-                clone_outlets=True,
+                flow_run_name=flow_run_ctx.flow_run.name,
+                task_run=task_run,
             )
-            dpi.emit_process_start(
-                emitter=self.emitter,
-                start_timestamp_millis=int(task_run.start_time.timestamp() * 1000),
-                emit_template=False,
-            )
-            dpi.emit_process_end(
-                emitter=self.emitter,
-                end_timestamp_millis=int(task_run.end_time.timestamp() * 1000),
-                result=result,
-                result_type="prefect",
-            )
+
+        self.emit_workspaces()
