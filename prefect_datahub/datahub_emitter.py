@@ -17,8 +17,7 @@ from datahub.utilities.urns.dataset_urn import DatasetUrn
 from datahub_provider.entities import _Entity
 from prefect import get_run_logger
 from prefect.blocks.core import Block
-from prefect.client.cloud import get_cloud_client
-from prefect.client.orchestration import get_client
+from prefect.client import cloud, orchestration
 from prefect.client.schemas import TaskRun
 from prefect.context import FlowRunContext, TaskRunContext
 from pydantic import Field
@@ -78,7 +77,9 @@ class DatahubEmitter(Block):
         return [DatasetUrn.create_from_string(let.urn) for let in iolets]
 
     async def _get_flow_run_graph(self, flow_run_id):
-        response = await get_client()._client.get(f"/flow_runs/{flow_run_id}/graph")
+        response = await orchestration.get_client()._client.get(
+            f"/flow_runs/{flow_run_id}/graph"
+        )
         return response.json()
 
     def generate_datajob(
@@ -134,7 +135,7 @@ class DatahubEmitter(Block):
 
     def generate_dataflow(self, flow_run_ctx: FlowRunContext) -> DataFlow:
         flow = asyncio.run(
-            get_client().read_flow(flow_id=flow_run_ctx.flow_run.flow_id)
+            orchestration.get_client().read_flow(flow_id=flow_run_ctx.flow_run.flow_id)
         )
         dataflow = DataFlow(
             orchestrator="prefect",
@@ -175,7 +176,9 @@ class DatahubEmitter(Block):
 
     def run_dataflow(self, dataflow: DataFlow, flow_run_ctx: FlowRunContext) -> None:
         flow_run = asyncio.run(
-            get_client().read_flow_run(flow_run_id=flow_run_ctx.flow_run.id)
+            orchestration.get_client().read_flow_run(
+                flow_run_id=flow_run_ctx.flow_run.id
+            )
         )
         dpi = DataProcessInstance.from_dataflow(
             dataflow=dataflow, id=flow_run_ctx.flow_run.name
@@ -255,33 +258,6 @@ class DatahubEmitter(Block):
             result_type="prefect",
         )
 
-    def emit_workspaces(self) -> None:
-        try:
-            asyncio.run(get_cloud_client().api_healthcheck())
-        except Exception as e:
-            get_run_logger().info(
-                "Cannot emit workspaces. Please set correct 'PREFECT_API_KEY'."
-            )
-            return
-
-        workspaces = asyncio.run(get_cloud_client().read_workspaces())
-        for workspace in workspaces:
-            container_key = WorkspaceKey(
-                workspace_name=workspace.workspace_name,
-                platform="prefect",
-                instance=self.platform_instance,
-                env=self.env,
-            )
-            container_work_units = gen_containers(
-                container_key=container_key,
-                name=workspace.workspace_name,
-                sub_types=["Workspace"],
-                description=workspace.workspace_description,
-                owner_urn=make_user_urn(workspace.account_name),
-            )
-            for workunit in container_work_units:
-                self.emitter.emit(workunit.metadata)
-
     def emit_task(self, inputs: List = None, outputs: List = None):
         flow_run_ctx = FlowRunContext.get()
         task_run_ctx = TaskRunContext.get()
@@ -313,7 +289,7 @@ class DatahubEmitter(Block):
             for prefect_future in flow_run_ctx.task_run_futures
         }
         for node in graph_json:
-            task_run = asyncio.run(get_client().read_task_run(node["id"]))
+            task_run = asyncio.run(orchestration.get_client().read_task_run(node["id"]))
             # Emit task
             datajob_urn = DataJobUrn.create_from_ids(
                 data_flow_urn=str(dataflow.urn),
@@ -334,11 +310,34 @@ class DatahubEmitter(Block):
                 datajob.upstream_urns.extend([upstream_task_urn])
             datajob.emit(self.emitter)
 
-            self.run_dataflow(dataflow, flow_run_ctx)
             self.run_datajob(
                 datajob=datajob,
                 flow_run_name=flow_run_ctx.flow_run.name,
                 task_run=task_run,
             )
 
-        self.emit_workspaces()
+    def emit_workspaces(self) -> None:
+        try:
+            asyncio.run(cloud.get_cloud_client().api_healthcheck())
+        except Exception as e:
+            get_run_logger().info(
+                "Cannot emit workspaces. Please set correct 'PREFECT_API_KEY'."
+            )
+            return
+        workspaces = asyncio.run(cloud.get_cloud_client().read_workspaces())
+        for workspace in workspaces:
+            container_key = WorkspaceKey(
+                workspace_name=workspace.workspace_name,
+                platform="prefect",
+                instance=self.platform_instance,
+                env=self.env,
+            )
+            container_work_units = gen_containers(
+                container_key=container_key,
+                name=workspace.workspace_name,
+                sub_types=["Workspace"],
+                description=workspace.workspace_description,
+                owner_urn=make_user_urn(workspace.account_name),
+            )
+            for workunit in container_work_units:
+                self.emitter.emit(workunit.metadata)

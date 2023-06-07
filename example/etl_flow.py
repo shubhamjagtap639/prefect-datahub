@@ -36,6 +36,7 @@ def etl():
     data = transform("This is data")
     load(data)
     datahub_emitter.emit_flow()
+    datahub_emitter.emit_workspaces()
     print("")
 
 

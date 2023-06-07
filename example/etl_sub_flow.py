@@ -3,8 +3,7 @@ from prefect import flow, task
 
 from prefect_datahub import DatahubEmitter
 
-# datahub_emitter = DatahubEmitter.load("datahub-emitter-block")
-datahub_emitter = DatahubEmitter()
+datahub_emitter = DatahubEmitter.load("datahub-emitter-block")
 
 
 @task(name="Extract", description="Extract the actual data")
@@ -26,7 +25,7 @@ def transform(actual_data):
 
 @task(name="Load_task", description="Load the actual data")
 def load(data):
-    # datahub_emitter.emit_task()
+    datahub_emitter.emit_task()
     print(data)
 
 
