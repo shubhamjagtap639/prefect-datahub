@@ -390,7 +390,6 @@ async def mock_task_run_future():
 
 @pytest.fixture(scope="module")
 def mock_run_context():
-
     task_run_ctx = MagicMock()
     task_run_ctx.task.task_key = mock_transform_task_json["task_key"]
     task_run_ctx.task.name = mock_transform_task_json["name"]

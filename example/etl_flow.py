@@ -29,14 +29,13 @@ def load(data):
     print(data)
 
 
-@flow(log_prints=True)
+@flow(name="ETL flow", description="Extract transform load flow")
 def etl():
     print("Flow started")
     extract()
     data = transform("This is data")
     load(data)
     datahub_emitter.emit_flow()
-    datahub_emitter.emit_workspaces()
     print("")
 
 

@@ -23,7 +23,10 @@ def test_emit_task(mock_emit, mock_run_context):
     task_run_ctx: TaskRunContext = mock_run_context[0]
     flow_run_ctx: FlowRunContext = mock_run_context[1]
 
-    expected_datajob_urn = f"urn:li:dataJob:(urn:li:dataFlow:(prefect,{flow_run_ctx.flow.name},prod),{task_run_ctx.task.task_key})"
+    expected_datajob_urn = (
+        f"urn:li:dataJob:(urn:li:dataFlow:"
+        f"(prefect,{flow_run_ctx.flow.name},prod),{task_run_ctx.task.task_key})"
+    )
 
     assert expected_datajob_urn in datahub_emitter.datajob_to_emit.keys()
     actual_datajob = datahub_emitter.datajob_to_emit[expected_datajob_urn]
@@ -64,22 +67,26 @@ def test_emit_flow(mock_emit, mock_run_context, mock_prefect_client):
     assert mock_emitter.method_calls[4].args[0].aspectName == "dataJobInfo"
     assert (
         mock_emitter.method_calls[4].args[0].entityUrn
-        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,{flow_run_ctx.flow.name},prod),__main__.extract)"
+        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,"
+        f"{flow_run_ctx.flow.name},prod),__main__.extract)"
     )
     assert mock_emitter.method_calls[5].args[0].aspectName == "dataJobInputOutput"
     assert (
         mock_emitter.method_calls[5].args[0].entityUrn
-        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,{flow_run_ctx.flow.name},prod),__main__.extract)"
+        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,"
+        f"{flow_run_ctx.flow.name},prod),__main__.extract)"
     )
     assert mock_emitter.method_calls[6].args[0].aspectName == "ownership"
     assert (
         mock_emitter.method_calls[6].args[0].entityUrn
-        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,{flow_run_ctx.flow.name},prod),__main__.extract)"
+        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,"
+        f"{flow_run_ctx.flow.name},prod),__main__.extract)"
     )
     assert mock_emitter.method_calls[7].args[0].aspectName == "globalTags"
     assert (
         mock_emitter.method_calls[7].args[0].entityUrn
-        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,{flow_run_ctx.flow.name},prod),__main__.extract)"
+        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,"
+        f"{flow_run_ctx.flow.name},prod),__main__.extract)"
     )
     assert (
         mock_emitter.method_calls[8].args[0].aspectName
@@ -116,22 +123,26 @@ def test_emit_flow(mock_emit, mock_run_context, mock_prefect_client):
     assert mock_emitter.method_calls[12].args[0].aspectName == "dataJobInfo"
     assert (
         mock_emitter.method_calls[12].args[0].entityUrn
-        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,{flow_run_ctx.flow.name},prod),__main__.load)"
+        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,"
+        f"{flow_run_ctx.flow.name},prod),__main__.load)"
     )
     assert mock_emitter.method_calls[13].args[0].aspectName == "dataJobInputOutput"
     assert (
         mock_emitter.method_calls[13].args[0].entityUrn
-        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,{flow_run_ctx.flow.name},prod),__main__.load)"
+        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,"
+        f"{flow_run_ctx.flow.name},prod),__main__.load)"
     )
     assert mock_emitter.method_calls[14].args[0].aspectName == "ownership"
     assert (
         mock_emitter.method_calls[14].args[0].entityUrn
-        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,{flow_run_ctx.flow.name},prod),__main__.load)"
+        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,"
+        f"{flow_run_ctx.flow.name},prod),__main__.load)"
     )
     assert mock_emitter.method_calls[15].args[0].aspectName == "globalTags"
     assert (
         mock_emitter.method_calls[15].args[0].entityUrn
-        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,{flow_run_ctx.flow.name},prod),__main__.load)"
+        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,"
+        f"{flow_run_ctx.flow.name},prod),__main__.load)"
     )
     assert (
         mock_emitter.method_calls[16].args[0].aspectName
@@ -168,22 +179,26 @@ def test_emit_flow(mock_emit, mock_run_context, mock_prefect_client):
     assert mock_emitter.method_calls[20].args[0].aspectName == "dataJobInfo"
     assert (
         mock_emitter.method_calls[20].args[0].entityUrn
-        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,{flow_run_ctx.flow.name},prod),__main__.transform)"
+        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,"
+        f"{flow_run_ctx.flow.name},prod),__main__.transform)"
     )
     assert mock_emitter.method_calls[21].args[0].aspectName == "dataJobInputOutput"
     assert (
         mock_emitter.method_calls[21].args[0].entityUrn
-        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,{flow_run_ctx.flow.name},prod),__main__.transform)"
+        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,"
+        f"{flow_run_ctx.flow.name},prod),__main__.transform)"
     )
     assert mock_emitter.method_calls[22].args[0].aspectName == "ownership"
     assert (
         mock_emitter.method_calls[22].args[0].entityUrn
-        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,{flow_run_ctx.flow.name},prod),__main__.transform)"
+        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,"
+        f"{flow_run_ctx.flow.name},prod),__main__.transform)"
     )
     assert mock_emitter.method_calls[23].args[0].aspectName == "globalTags"
     assert (
         mock_emitter.method_calls[23].args[0].entityUrn
-        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,{flow_run_ctx.flow.name},prod),__main__.transform)"
+        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,"
+        f"{flow_run_ctx.flow.name},prod),__main__.transform)"
     )
     assert (
         mock_emitter.method_calls[24].args[0].aspectName

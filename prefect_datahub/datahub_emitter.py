@@ -1,4 +1,4 @@
-"""Module for emit metadata to Datahub REST. """
+"""Datahub Emitter classes used to emit prefect metadata to Datahub REST. """
 
 import asyncio
 from typing import Dict, List, Optional
@@ -22,6 +22,8 @@ from prefect.client.schemas import TaskRun
 from prefect.context import FlowRunContext, TaskRunContext
 from pydantic import Field
 
+from prefect_datahub import constants
+
 
 class WorkspaceKey(PlatformKey):
     workspace_name: str
@@ -32,9 +34,13 @@ class DatahubEmitter(Block):
     Block used to emit prefect task and flow related metadata to Datahub REST
 
     Attributes:
-        datahub_rest_url (str): The value to store.
-        cluster (str): The value to store.
-        capture_tags_info (boolean): The value to store.
+        datahub_rest_url (str): The Datahub GMS Rest URL.
+        env (str): The environment that all assets produced by this orchestrator \
+            belong to. For more detail and possible values refer \
+            https://datahubproject.io/docs/graphql/enums/#fabrictype.
+        platform_instance (str): The instance of the platform that all assets \
+            produced by this recipe belong to. For more detail please refer to \
+            https://datahubproject.io/docs/platform-instances/.
 
     Example:
         Load a stored value:
@@ -58,18 +64,22 @@ class DatahubEmitter(Block):
     env: Optional[str] = Field(
         default="prod",
         title="Environment",
-        description="Name of the prefect environment.",
+        description="The environment that all assets produced by this orchestrator "
+        "belong to. For more detail and possible values refer "
+        "https://datahubproject.io/docs/graphql/enums/#fabrictype.",
     )
 
     platform_instance: Optional[str] = Field(
         default=None,
         title="Platform instance",
-        description="Name of the prefect platform instance.",
+        description="The instance of the platform that all assets produced by this "
+        "recipe belong to. For more detail please refer to "
+        "https://datahubproject.io/docs/platform-instances/.",
     )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.datajob_to_emit = {}
+        self.datajobs_to_emit = {}
         self.emitter = DatahubRestEmitter(gms_server=self.datahub_rest_url)
         self.emitter.test_connection()
 
@@ -82,14 +92,26 @@ class DatahubEmitter(Block):
         )
         return response.json()
 
-    def generate_datajob(
+    def _generate_datajob(
         self,
         flow_run_ctx: FlowRunContext,
-        task_run_ctx: TaskRunContext = None,
-        task_key: str = None,
+        task_run_ctx: Optional[TaskRunContext] = None,
+        task_key: Optional[str] = None,
     ) -> Optional[DataJob]:
+        """
+        Create datajob entity using task run ctx and flow run ctx.
+        Assign description, tags, and properties to created datajob.
+
+        Args:
+            flow_run_ctx: The prefect current running flow run context.
+            task_run_ctx: The prefect current running task run context.
+            task_key: The task key.
+
+        Returns:
+            The datajob entity.
+        """
         dataflow_urn = DataFlowUrn.create_from_ids(
-            orchestrator="prefect",
+            orchestrator=constants.ORCHESTRATOR,
             flow_id=flow_run_ctx.flow.name,
             env=self.env,
             platform_instance=self.platform_instance,
@@ -106,16 +128,16 @@ class DatahubEmitter(Block):
             job_property_bag: Dict[str, str] = {}
 
             allowed_task_keys = [
-                "version",
-                "cache_expiration",
-                "task_run_name",
-                "retries",
-                "timeout_seconds",
-                "log_prints",
-                "refresh_cache",
-                "task_key",
-                "on_completion",
-                "on_failure",
+                constants.VERSION,
+                constants.CACHE_EXPIRATION,
+                constants.TASK_RUN_NAME,
+                constants.RETRIES,
+                constants.TIMEOUT_SECONDS,
+                constants.LOG_PRINTS,
+                constants.REFRESH_CACHE,
+                constants.TASK_KEY,
+                constants.ON_COMPLETION,
+                constants.ON_FAILURE,
             ]
             for key in allowed_task_keys:
                 if (
@@ -133,13 +155,24 @@ class DatahubEmitter(Block):
             return datajob
         return None
 
-    def generate_dataflow(self, flow_run_ctx: FlowRunContext) -> DataFlow:
+    def _generate_dataflow(self, flow_run_ctx: FlowRunContext) -> DataFlow:
+        """
+        Create dataflow entity using flow run ctx.
+        Assign description, tags, and properties to created dataflow.
+
+        Args:
+            flow_run_ctx: The prefect current running flow run context.
+
+        Returns:
+            The dataflow entity.
+        """
         flow = asyncio.run(
             orchestration.get_client().read_flow(flow_id=flow_run_ctx.flow_run.flow_id)
         )
         dataflow = DataFlow(
-            orchestrator="prefect",
+            orchestrator=constants.ORCHESTRATOR,
             id=flow_run_ctx.flow.name,
+            cluster=self.env,
             env=self.env,
             name=flow_run_ctx.flow.name,
             platform_instance=self.platform_instance,
@@ -147,22 +180,22 @@ class DatahubEmitter(Block):
         dataflow.description = flow_run_ctx.flow.description
         dataflow.tags = flow.tags
         flow_property_bag: Dict[str, str] = {}
-        flow_property_bag["id"] = str(flow.id)
-        flow_property_bag["created"] = str(flow.created)
-        flow_property_bag["updated"] = str(flow.updated)
+        flow_property_bag[constants.ID] = str(flow.id)
+        flow_property_bag[constants.CREATED] = str(flow.created)
+        flow_property_bag[constants.UPDATED] = str(flow.updated)
 
         allowed_flow_keys = [
-            "version",
-            "flow_run_name",
-            "retries",
-            "task_runner",
-            "timeout_seconds",
-            "persist_result",
-            "log_prints",
-            "on_completion",
-            "on_failure",
-            "on_cancellation",
-            "on_crashed",
+            constants.VERSION,
+            constants.FLOW_RUN_NAME,
+            constants.RETRIES,
+            constants.TASK_RUNNER,
+            constants.TIMEOUT_SECONDS,
+            constants.PERSIST_RESULT,
+            constants.LOG_PRINTS,
+            constants.ON_COMPLETION,
+            constants.ON_FAILURE,
+            constants.ON_CANCELLATION,
+            constants.ON_CRASHED,
         ]
         for key in allowed_flow_keys:
             if (
@@ -174,7 +207,16 @@ class DatahubEmitter(Block):
 
         return dataflow
 
-    def run_dataflow(self, dataflow: DataFlow, flow_run_ctx: FlowRunContext) -> None:
+    def _run_dataflow(self, dataflow: DataFlow, flow_run_ctx: FlowRunContext) -> None:
+        """
+        Emit prefect flow run to datahub rest. Prefect flow run get mapped with datahub
+        data process instance entity which get's generate from provided dataflow entity.
+        Assign flow run properties to data process instance properties.
+
+        Args:
+            dataflow: The datahub dataflow entity used to create data process instance.
+            flow_run_ctx: The prefect current running flow run context.
+        """
         flow_run = asyncio.run(
             orchestration.get_client().read_flow_run(
                 flow_run_id=flow_run_ctx.flow_run.id
@@ -185,19 +227,22 @@ class DatahubEmitter(Block):
         )
 
         dpi_property_bag: Dict[str, str] = {}
-        dpi_property_bag["id"] = str(flow_run.id)
-        dpi_property_bag["created"] = str(flow_run.created)
-        dpi_property_bag["created_by"] = str(flow_run.created_by)
-        dpi_property_bag["auto_scheduled"] = str(flow_run.auto_scheduled)
-        dpi_property_bag["estimated_run_time"] = str(flow_run.estimated_run_time)
-        dpi_property_bag["start_time"] = str(flow_run.start_time)
-        dpi_property_bag["total_run_time"] = str(flow_run.total_run_time)
-        dpi_property_bag["next_scheduled_start_time"] = str(
-            flow_run.next_scheduled_start_time
-        )
-        dpi_property_bag["tags"] = str(flow_run.tags)
-        dpi_property_bag["updated"] = str(flow_run.updated)
-        dpi_property_bag["run_count"] = str(flow_run.run_count)
+        allowed_flow_run_keys = [
+            constants.ID,
+            constants.CREATED,
+            constants.UPDATED,
+            constants.CREATED_BY,
+            constants.AUTO_SCHEDULED,
+            constants.ESTIMATED_RUN_TIME,
+            constants.START_TIME,
+            constants.TOTAL_RUN_TIME,
+            constants.NEXT_SCHEDULED_START_TIME,
+            constants.TAGS,
+            constants.RUN_COUNT,
+        ]
+        for key in allowed_flow_run_keys:
+            if hasattr(flow_run, key) and getattr(flow_run, key) is not None:
+                dpi_property_bag[key] = str(getattr(flow_run, key))
         dpi.properties.update(dpi_property_bag)
 
         dpi.emit_process_start(
@@ -207,9 +252,19 @@ class DatahubEmitter(Block):
             ),
         )
 
-    def run_datajob(
+    def _run_datajob(
         self, datajob: DataJob, flow_run_name: str, task_run: TaskRun
     ) -> None:
+        """
+        Emit prefect task run to datahub rest. Prefect task run get mapped with datahub
+        data process instance entity which get's generate from provided datajob entity.
+        Assign task run properties to data process instance properties.
+
+        Args:
+            datajob: The datahub datajob entity used to create data process instance.
+            flow_run_name: The prefect current running flow run name.
+            task_run: The prefect task run entity.
+        """
         dpi = DataProcessInstance.from_datajob(
             datajob=datajob,
             id=f"{flow_run_name}.{task_run.name}",
@@ -218,31 +273,34 @@ class DatahubEmitter(Block):
         )
 
         dpi_property_bag: Dict[str, str] = {}
-        dpi_property_bag["id"] = str(task_run.id)
-        dpi_property_bag["flow_run_id"] = str(task_run.flow_run_id)
-        dpi_property_bag["created"] = str(task_run.created)
-        dpi_property_bag["estimated_run_time"] = str(task_run.estimated_run_time)
-        dpi_property_bag["expected_start_time"] = str(task_run.expected_start_time)
-        dpi_property_bag["start_time"] = str(task_run.start_time)
-        dpi_property_bag["end_time"] = str(task_run.end_time)
-        dpi_property_bag["total_run_time"] = str(task_run.total_run_time)
-        dpi_property_bag["next_scheduled_start_time"] = str(
-            task_run.next_scheduled_start_time
-        )
-        dpi_property_bag["tags"] = str(task_run.tags)
-        dpi_property_bag["updated"] = str(task_run.updated)
-        dpi_property_bag["run_count"] = str(task_run.run_count)
+        allowed_task_run_keys = [
+            constants.ID,
+            constants.FLOW_RUN_ID,
+            constants.CREATED,
+            constants.UPDATED,
+            constants.ESTIMATED_RUN_TIME,
+            constants.START_TIME,
+            constants.END_TIME,
+            constants.TOTAL_RUN_TIME,
+            constants.NEXT_SCHEDULED_START_TIME,
+            constants.TAGS,
+            constants.RUN_COUNT,
+        ]
+        for key in allowed_task_run_keys:
+            if hasattr(task_run, key) and getattr(task_run, key) is not None:
+                dpi_property_bag[key] = str(getattr(task_run, key))
         dpi.properties.update(dpi_property_bag)
 
-        if task_run.state_name == "Completed":
+        if task_run.state_name == constants.COMPLETE:
             result = InstanceRunResult.SUCCESS
-        elif task_run.state_name == "Failed":
+        elif task_run.state_name == constants.FAILED:
             result = InstanceRunResult.FAILURE
-        elif task_run.state_name == "Cancelled":
+        elif task_run.state_name == constants.CANCELLED:
             result = InstanceRunResult.SKIPPED
         else:
             raise Exception(
-                f"Result should be either success or failure and it was {task_run.state_name}"
+                f"Result should be either success or failure and it was "
+                f"{task_run.state_name}"
             )
 
         dpi.emit_process_start(
@@ -255,29 +313,126 @@ class DatahubEmitter(Block):
             emitter=self.emitter,
             end_timestamp_millis=int(task_run.end_time.timestamp() * 1000),
             result=result,
-            result_type="prefect",
+            result_type=constants.ORCHESTRATOR,
         )
 
-    def emit_task(self, inputs: List = None, outputs: List = None):
+    def _emit_workspaces(self) -> None:
+        """
+        Emit prefect workspace metadata to datahub rest.
+        Prefect workspce get mapped with datahub container entity.
+        Workspace account name also get emit as owner of continer.
+        """
+        try:
+            asyncio.run(cloud.get_cloud_client().api_healthcheck())
+        except Exception:
+            get_run_logger().info(
+                "Cannot emit workspaces. Please set correct 'PREFECT_API_KEY'."
+            )
+            return
+        SUB_TYPE = "Workspace"
+        workspaces = asyncio.run(cloud.get_cloud_client().read_workspaces())
+        for workspace in workspaces:
+            container_key = WorkspaceKey(
+                workspace_name=workspace.workspace_name,
+                platform=constants.ORCHESTRATOR,
+                instance=self.platform_instance,
+                env=self.env,
+            )
+            container_work_units = gen_containers(
+                container_key=container_key,
+                name=workspace.workspace_name,
+                sub_types=[SUB_TYPE],
+                description=workspace.workspace_description,
+                owner_urn=make_user_urn(workspace.account_name),
+            )
+            for workunit in container_work_units:
+                self.emitter.emit(workunit.metadata)
+
+    def emit_task(
+        self,
+        inputs: Optional[List[_Entity]] = None,
+        outputs: Optional[List[_Entity]] = None,
+    ) -> None:
+        """
+        Emit prefect task metadata to datahub rest. Prefect task get mapped with datahub
+        datajob entity. Assign provided inputs and outputs as datajob inlets and outlets
+        respectively. To emit task metadata it is compulsory to emit flow as well
+        otherwise task will not get emit.
+
+        Args:
+            inputs (list): The list of task inputs.
+            outputs (list): The list of task outputs.
+
+        Example:
+            Emit the task metadata as show below:
+            ```python
+            from datahub_provider.entities import Dataset
+            from prefect import flow, task
+
+            from prefect_datahub import DatahubEmitter
+
+            datahub_emitter = DatahubEmitter.load("MY_BLOCK_NAME")
+
+            @task(name="Transform", description="Transform the data")
+            def transform(data):
+                data = data.split(" ")
+                datahub_emitter.emit_task(
+                    inputs=[Dataset("snowflake", "mydb.schema.tableA")],
+                    outputs=[Dataset("snowflake", "mydb.schema.tableC")],
+                )
+                return data
+
+            @flow(name="ETL flow", description="Extract transform load flow")
+            def etl():
+                data = transform("This is data")
+                datahub_emitter.emit_flow()
+            ```
+        """
         flow_run_ctx = FlowRunContext.get()
         task_run_ctx = TaskRunContext.get()
         assert flow_run_ctx
         assert task_run_ctx
 
-        datajob = self.generate_datajob(
+        datajob = self._generate_datajob(
             flow_run_ctx=flow_run_ctx, task_run_ctx=task_run_ctx
         )
         if inputs is not None:
             datajob.inlets.extend(self._entities_to_urn_list(inputs))
         if outputs is not None:
             datajob.outlets.extend(self._entities_to_urn_list(outputs))
-        self.datajob_to_emit[str(datajob.urn)] = datajob
+        self.datajobs_to_emit[str(datajob.urn)] = datajob
 
-    def emit_flow(self):
+    def emit_flow(self) -> None:
+        """
+        Emit prefect flow metadata to datahub rest. Prefect flow get mapped with datahub
+        dataflow entity. Add upstream dependencies if present for each task.
+        Emit the prefect task run metadata as well. If user haven't called emit_task in
+        task function still emit_flow will emit task but without task name, description,
+        tags and properties.
+        Emit the prefect workspace metadata as well.
+
+
+        Example:
+            Emit the flow metadata as show below:
+            ```python
+            from prefect import flow, task
+
+            from prefect_datahub import DatahubEmitter
+
+            datahub_emitter = DatahubEmitter.load("MY_BLOCK_NAME")
+
+            @flow(name="ETL flow", description="Extract transform load flow")
+            def etl():
+                data = extract()
+                data = transform(data)
+                load(data)
+                datahub_emitter.emit_flow()
+            ```
+        """
         flow_run_ctx = FlowRunContext.get()
         assert flow_run_ctx
         # Emit flow
-        dataflow = self.generate_dataflow(flow_run_ctx=flow_run_ctx)
+        dataflow = self._generate_dataflow(flow_run_ctx=flow_run_ctx)
         dataflow.emit(self.emitter)
 
         # Emit task, task run and add upstream task if present for each task
@@ -289,20 +444,22 @@ class DatahubEmitter(Block):
             for prefect_future in flow_run_ctx.task_run_futures
         }
         for node in graph_json:
-            task_run = asyncio.run(orchestration.get_client().read_task_run(node["id"]))
+            task_run = asyncio.run(
+                orchestration.get_client().read_task_run(node[constants.ID])
+            )
             # Emit task
             datajob_urn = DataJobUrn.create_from_ids(
                 data_flow_urn=str(dataflow.urn),
                 job_id=task_run.task_key,
             )
-            if str(datajob_urn) in self.datajob_to_emit:
-                datajob = self.datajob_to_emit[str(datajob_urn)]
+            if str(datajob_urn) in self.datajobs_to_emit:
+                datajob = self.datajobs_to_emit[str(datajob_urn)]
             else:
-                datajob = self.generate_datajob(
+                datajob = self._generate_datajob(
                     flow_run_ctx=flow_run_ctx, task_key=task_run.task_key
                 )
             # Add upstrem urns
-            for each in node["upstream_dependencies"]:
+            for each in node[constants.UPSTREAM_DEPENDENCIES]:
                 upstream_task_urn = DataJobUrn.create_from_ids(
                     data_flow_urn=str(dataflow.urn),
                     job_id=task_run_key_map[each["id"]],
@@ -310,34 +467,9 @@ class DatahubEmitter(Block):
                 datajob.upstream_urns.extend([upstream_task_urn])
             datajob.emit(self.emitter)
 
-            self.run_datajob(
+            # self._run_dataflow(dataflow,flow_run_ctx)
+            self._run_datajob(
                 datajob=datajob,
                 flow_run_name=flow_run_ctx.flow_run.name,
                 task_run=task_run,
             )
-
-    def emit_workspaces(self) -> None:
-        try:
-            asyncio.run(cloud.get_cloud_client().api_healthcheck())
-        except Exception as e:
-            get_run_logger().info(
-                "Cannot emit workspaces. Please set correct 'PREFECT_API_KEY'."
-            )
-            return
-        workspaces = asyncio.run(cloud.get_cloud_client().read_workspaces())
-        for workspace in workspaces:
-            container_key = WorkspaceKey(
-                workspace_name=workspace.workspace_name,
-                platform="prefect",
-                instance=self.platform_instance,
-                env=self.env,
-            )
-            container_work_units = gen_containers(
-                container_key=container_key,
-                name=workspace.workspace_name,
-                sub_types=["Workspace"],
-                description=workspace.workspace_description,
-                owner_urn=make_user_urn(workspace.account_name),
-            )
-            for workunit in container_work_units:
-                self.emitter.emit(workunit.metadata)
