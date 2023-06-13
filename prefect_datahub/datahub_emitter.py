@@ -207,7 +207,6 @@ class DatahubEmitter(Block):
             orchestrator=ORCHESTRATOR,
             flow_id=flow_run_ctx.flow.name,
             env=self.env,
-            platform_instance=self.platform_instance,
         )
         if task_run_ctx is not None:
             datajob = DataJob(
