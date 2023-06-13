@@ -74,10 +74,6 @@ FAILED = "Failed"
 CANCELLED = "Cancelled"
 
 
-class WorkspaceKey(PlatformKey):
-    workspace_name: str
-
-
 class DatahubEmitter(Block):
     """
     Block used to emit prefect task and flow related metadata to Datahub REST
@@ -416,6 +412,8 @@ class DatahubEmitter(Block):
             )
             return None
         SUB_TYPE = "Workspace"
+        class WorkspaceKey(PlatformKey):
+            workspace_name: str
         current_workspace_id = PREFECT_API_URL.value().split("/")[-1]
         workspaces = asyncio.run(cloud.get_cloud_client().read_workspaces())
         for workspace in workspaces:

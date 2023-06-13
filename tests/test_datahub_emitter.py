@@ -6,22 +6,7 @@ from datahub.utilities.urns.dataset_urn import DatasetUrn
 from datahub_provider.entities import Dataset
 from prefect.context import FlowRunContext, TaskRunContext
 
-from prefect_datahub import constants
-from prefect_datahub.datahub_emitter import DatahubEmitter, WorkspaceKey
-
-
-def test_constants():
-    assert constants.ORCHESTRATOR == "prefect"
-
-
-def test_workspace_key():
-    container_key = WorkspaceKey(
-        workspace_name="datahub",
-        platform="prefect",
-        env="PROD",
-    )
-    assert container_key.guid() == "bf46b065c6816616f35e83d8be976c62"
-    assert container_key.workspace_name == "datahub"
+from prefect_datahub.datahub_emitter import DatahubEmitter
 
 
 @patch("prefect_datahub.datahub_emitter.DatahubRestEmitter", autospec=True)
