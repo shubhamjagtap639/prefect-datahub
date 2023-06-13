@@ -31,6 +31,7 @@ def test_entities_to_urn_list(mock_emit):
     for dataset_urn in dataset_urn_list:
         assert isinstance(dataset_urn, DatasetUrn)
 
+
 @patch("prefect_datahub.datahub_emitter.DatahubRestEmitter", autospec=True)
 def test_get_flow_run_graph(mock_emit, mock_prefect_client):
     graph_json = asyncio.run(

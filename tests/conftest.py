@@ -468,11 +468,10 @@ def mock_prefect_cloud_client():
     prefect_cloud_client_mock = MagicMock()
     prefect_cloud_client_mock.api_healthcheck.side_effect = mock_api_healthcheck
     prefect_cloud_client_mock.read_workspaces.side_effect = mock_read_workspaces
-    with patch(
-        "prefect_datahub.datahub_emitter.cloud"
-    ) as mock_client, patch(
+    with patch("prefect_datahub.datahub_emitter.cloud") as mock_client, patch(
         "prefect_datahub.datahub_emitter.PREFECT_API_URL.value",
-        return_value = "https://api.prefect.cloud/api/accounts/33e98cfe-ad06-4ceb-a500-c11148499f75/workspaces/157eb822-1b3b-4338-ae80-98edd5d00cb9"
+        return_value="https://api.prefect.cloud/api/accounts/33e98cfe-ad06-4ceb-"
+        "a500-c11148499f75/workspaces/157eb822-1b3b-4338-ae80-98edd5d00cb9",
     ):
         mock_client.get_cloud_client.return_value = prefect_cloud_client_mock
         yield prefect_cloud_client_mock
