@@ -13,7 +13,7 @@ mock_transform_task_json = {
     "name": "transform",
     "description": "Transform the actual data",
     "task_key": "__main__.transform",
-    "tags": [],
+    "tags": ["etl flow task"],
 }
 mock_extract_task_run_json = {
     "id": "fa14a52b-d271-4c41-99cb-6b42ca7c070b",

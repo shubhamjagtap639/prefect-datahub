@@ -81,8 +81,10 @@ def test_emit_flow(
     platform_instance = "datahub_workspace"
 
     datahub_emitter = DatahubEmitter(platform_instance=platform_instance)
+    datahub_emitter.add_task()
     datahub_emitter.emit_flow()
 
+    task_run_ctx: TaskRunContext = mock_run_context[0]
     flow_run_ctx: FlowRunContext = mock_run_context[1]
 
     expected_dataflow_urn = (
@@ -254,6 +256,10 @@ def test_emit_flow(
     assert (
         mock_emitter.method_calls[32].args[0].entityUrn
         == f"urn:li:dataJob:({expected_dataflow_urn},__main__.transform)"
+    )
+    assert (
+        mock_emitter.method_calls[32].args[0].aspect.tags[0].tag
+        == f"urn:li:tag:{task_run_ctx.task.tags[0]}"
     )
     assert mock_emitter.method_calls[33].args[0].aspectName == "browsePaths"
     assert (
