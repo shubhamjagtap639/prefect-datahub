@@ -10,6 +10,17 @@ from prefect_datahub.datahub_emitter import DatahubEmitter
 
 
 @patch("prefect_datahub.datahub_emitter.DatahubRestEmitter", autospec=True)
+def test_workspace_key():
+    container_key = DatahubEmitter().WorkspaceKey(
+        workspace_name="datahub",
+        platform="prefect",
+        env="PROD",
+    )
+    assert container_key.guid() == "bf46b065c6816616f35e83d8be976c62"
+    assert container_key.workspace_name == "datahub"
+
+
+@patch("prefect_datahub.datahub_emitter.DatahubRestEmitter", autospec=True)
 def test_entities_to_urn_list(mock_emit):
     dataset_urn_list = DatahubEmitter()._entities_to_urn_list(
         [Dataset("snowflake", "mydb.schema.tableA")]

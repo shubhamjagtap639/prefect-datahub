@@ -132,7 +132,13 @@ class DatahubEmitter(Block):
         "https://datahubproject.io/docs/platform-instances/.",
     )
 
+    class WorkspaceKey(PlatformKey):
+        workspace_name: str
+
     def __init__(self, *args, **kwargs):
+        """
+        Initialize datahub rest emitter
+        """
         super().__init__(*args, **kwargs)
         self.datajobs_to_emit = {}
         self.emitter = DatahubRestEmitter(gms_server=self.datahub_rest_url)
@@ -412,13 +418,11 @@ class DatahubEmitter(Block):
             )
             return None
         SUB_TYPE = "Workspace"
-        class WorkspaceKey(PlatformKey):
-            workspace_name: str
         current_workspace_id = PREFECT_API_URL.value().split("/")[-1]
         workspaces = asyncio.run(cloud.get_cloud_client().read_workspaces())
         for workspace in workspaces:
             if str(workspace.workspace_id) == current_workspace_id:
-                container_key = WorkspaceKey(
+                container_key = self.WorkspaceKey(
                     workspace_name=workspace.workspace_name,
                     platform=ORCHESTRATOR,
                     instance=self.platform_instance,
