@@ -21,6 +21,7 @@ def test_workspace_key():
         env="PROD",
     )
     assert container_key.guid() == "bf46b065c6816616f35e83d8be976c62"
+    assert container_key.workspace_name == "datahub"
 
 
 @patch("prefect_datahub.datahub_emitter.DatahubRestEmitter", autospec=True)

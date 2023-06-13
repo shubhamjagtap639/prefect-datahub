@@ -1,4 +1,0 @@
-[run]
-omit =
-    # omit this single file
-    prefect_datahub/constants.py
