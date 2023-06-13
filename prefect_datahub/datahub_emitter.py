@@ -386,18 +386,19 @@ class DatahubEmitter(Block):
                 dpi_property_bag[key] = str(getattr(task_run, key))
         dpi.properties.update(dpi_property_bag)
 
-        state_result_map: Dict[str, str] = {}
-        state_result_map[COMPLETE] = InstanceRunResult.SUCCESS
-        state_result_map[FAILED] = InstanceRunResult.FAILURE
-        state_result_map[CANCELLED] = InstanceRunResult.SKIPPED
+        state_result_map: Dict[str, str] = {
+            COMPLETE: InstanceRunResult.SUCCESS,
+            FAILED: InstanceRunResult.FAILURE,
+            CANCELLED: InstanceRunResult.SKIPPED,
+        }
 
-        if task_run.state_name in state_result_map:
-            result = state_result_map[task_run.state_name]
-        else:
+        if task_run.state_name not in state_result_map:
             raise Exception(
                 f"State should be either complete, failed or cancelled and it was "
                 f"{task_run.state_name}"
             )
+
+        result = state_result_map[task_run.state_name]
 
         dpi.emit_process_start(
             emitter=self.emitter,
