@@ -10,7 +10,7 @@ from prefect_datahub.datahub_emitter import DatahubEmitter
 
 
 @patch("prefect_datahub.datahub_emitter.DatahubRestEmitter", autospec=True)
-def test_workspace_key():
+def test_workspace_key(mock_emit):
     container_key = DatahubEmitter().WorkspaceKey(
         workspace_name="datahub",
         platform="prefect",
