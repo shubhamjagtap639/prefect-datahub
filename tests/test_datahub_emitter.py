@@ -23,15 +23,16 @@ def test_workspace_key():
     assert container_key.guid() == "bf46b065c6816616f35e83d8be976c62"
 
 
-def test_entities_to_urn_list():
+@patch("prefect_datahub.datahub_emitter.DatahubRestEmitter", autospec=True)
+def test_entities_to_urn_list(mock_emit):
     dataset_urn_list = DatahubEmitter()._entities_to_urn_list(
         [Dataset("snowflake", "mydb.schema.tableA")]
     )
     for dataset_urn in dataset_urn_list:
         assert isinstance(dataset_urn, DatasetUrn)
 
-
-def test_get_flow_run_graph(mock_prefect_client):
+@patch("prefect_datahub.datahub_emitter.DatahubRestEmitter", autospec=True)
+def test_get_flow_run_graph(mock_emit, mock_prefect_client):
     graph_json = asyncio.run(
         DatahubEmitter()._get_flow_run_graph("c3b947e5-3fa1-4b46-a2e2-58d50c938f2e")
     )
