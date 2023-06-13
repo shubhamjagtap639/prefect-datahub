@@ -266,7 +266,6 @@ class DatahubEmitter(Block):
             id=flow_run_ctx.flow.name,
             cluster=self.env,
             name=flow_run_ctx.flow.name,
-            platform_instance=self.platform_instance,
         )
         dataflow.description = flow_run_ctx.flow.description
         dataflow.tags = flow.tags
