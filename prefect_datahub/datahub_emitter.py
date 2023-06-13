@@ -8,16 +8,13 @@ from datahub.api.entities.dataprocess.dataprocess_instance import (
     DataProcessInstance,
     InstanceRunResult,
 )
-from datahub.emitter.mce_builder import make_user_urn
 from datahub.emitter.mcp import MetadataChangeProposalWrapper
-from datahub.emitter.mcp_builder import PlatformKey, gen_containers
 from datahub.emitter.rest_emitter import DatahubRestEmitter
 from datahub.metadata.schema_classes import BrowsePathsClass
 from datahub.utilities.urns.data_flow_urn import DataFlowUrn
 from datahub.utilities.urns.data_job_urn import DataJobUrn
 from datahub.utilities.urns.dataset_urn import DatasetUrn
 from datahub_provider.entities import _Entity
-from prefect import get_run_logger
 from prefect.blocks.core import Block
 from prefect.client import cloud, orchestration
 from prefect.client.schemas import TaskRun
@@ -72,10 +69,6 @@ UPSTREAM_DEPENDENCIES = "upstream_dependencies"
 COMPLETE = "Completed"
 FAILED = "Failed"
 CANCELLED = "Cancelled"
-
-
-class WorkspaceKey(PlatformKey):
-    workspace_name: str
 
 
 class DatahubEmitter(Block):
@@ -156,6 +149,26 @@ class DatahubEmitter(Block):
             The list of Dataset URN.
         """
         return [DatasetUrn.create_from_string(let.urn) for let in iolets]
+
+    def _get_workspace(self) -> Optional[str]:
+        """
+        Fetch workspace name if present in configured prefect api url.
+
+        Returns:
+            The workspace name.
+        """
+        try:
+            asyncio.run(cloud.get_cloud_client().api_healthcheck())
+        except Exception:
+            return None
+        if "workspaces" not in PREFECT_API_URL.value():
+            return None
+        current_workspace_id = PREFECT_API_URL.value().split("/")[-1]
+        workspaces = asyncio.run(cloud.get_cloud_client().read_workspaces())
+        for workspace in workspaces:
+            if str(workspace.workspace_id) == current_workspace_id:
+                return workspace.workspace_name
+        return None
 
     async def _get_flow_run_graph(self, flow_run_id) -> List[Dict]:
         """
@@ -396,51 +409,6 @@ class DatahubEmitter(Block):
             result_type=ORCHESTRATOR,
         )
 
-    def _emit_workspaces(self) -> Optional[str]:
-        """
-        Emit prefect workspace metadata to datahub rest.
-        Prefect workspace get mapped with datahub container entity.
-        Workspace account name also get emit as owner of container.
-
-        Returns:
-            The emitted workspace name.
-        """
-        try:
-            asyncio.run(cloud.get_cloud_client().api_healthcheck())
-        except Exception:
-            get_run_logger().info(
-                "Cannot emit workspaces. Please set correct 'PREFECT_API_KEY'."
-            )
-            return None
-        if "workspaces" not in PREFECT_API_URL.value():
-            get_run_logger().info(
-                "Cannot emit workspaces. Please login to prefect cloud using command "
-                "'prefect cloud login'."
-            )
-            return None
-        SUB_TYPE = "Workspace"
-        current_workspace_id = PREFECT_API_URL.value().split("/")[-1]
-        workspaces = asyncio.run(cloud.get_cloud_client().read_workspaces())
-        for workspace in workspaces:
-            if str(workspace.workspace_id) == current_workspace_id:
-                container_key = WorkspaceKey(
-                    workspace_name=workspace.workspace_name,
-                    platform=ORCHESTRATOR,
-                    instance=self.platform_instance,
-                    env=self.env,
-                )
-                container_work_units = gen_containers(
-                    container_key=container_key,
-                    name=workspace.workspace_name,
-                    sub_types=[SUB_TYPE],
-                    description=workspace.workspace_description,
-                    owner_urn=make_user_urn(workspace.account_name),
-                )
-                for workunit in container_work_units:
-                    self.emitter.emit(workunit.metadata)
-                return workspace.workspace_name
-        return None
-
     def add_task(
         self,
         inputs: Optional[List[_Entity]] = None,
@@ -525,8 +493,7 @@ class DatahubEmitter(Block):
         flow_run_ctx = FlowRunContext.get()
         assert flow_run_ctx
 
-        # Emit workspace first
-        workspace_name = self._emit_workspaces()
+        workspace_name = self._get_workspace()
 
         # Emit flow and flow run
         dataflow = self._generate_dataflow(flow_run_ctx=flow_run_ctx)
@@ -534,7 +501,7 @@ class DatahubEmitter(Block):
         if workspace_name is not None:
             mcp = MetadataChangeProposalWrapper(
                 entityUrn=str(dataflow.urn),
-                aspect=BrowsePathsClass(paths=[f"/{workspace_name}/{dataflow.name}"]),
+                aspect=BrowsePathsClass(paths=[f"/prefect/prod/{workspace_name}"]),
             )
             self.emitter.emit(mcp)
         self._emit_flow_run(dataflow, flow_run_ctx)
@@ -571,9 +538,7 @@ class DatahubEmitter(Block):
             if workspace_name is not None:
                 mcp = MetadataChangeProposalWrapper(
                     entityUrn=str(datajob.urn),
-                    aspect=BrowsePathsClass(
-                        paths=[f"/{workspace_name}/{dataflow.name}/{datajob.name}"]
-                    ),
+                    aspect=BrowsePathsClass(paths=[f"/prefect/prod/{workspace_name}"]),
                 )
                 self.emitter.emit(mcp)
 
@@ -582,5 +547,3 @@ class DatahubEmitter(Block):
                 flow_run_name=flow_run_ctx.flow_run.name,
                 task_run=task_run,
             )
-
-        # Emit workspace
