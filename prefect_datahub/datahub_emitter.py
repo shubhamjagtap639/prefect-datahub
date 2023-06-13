@@ -74,6 +74,10 @@ FAILED = "Failed"
 CANCELLED = "Cancelled"
 
 
+class WorkspaceKey(PlatformKey):
+    workspace_name: str
+
+
 class DatahubEmitter(Block):
     """
     Block used to emit prefect task and flow related metadata to Datahub REST
@@ -131,9 +135,6 @@ class DatahubEmitter(Block):
         "recipe belong to. For more detail please refer to "
         "https://datahubproject.io/docs/platform-instances/.",
     )
-
-    class WorkspaceKey(PlatformKey):
-        workspace_name: str
 
     def __init__(self, *args, **kwargs):
         """
@@ -422,7 +423,7 @@ class DatahubEmitter(Block):
         workspaces = asyncio.run(cloud.get_cloud_client().read_workspaces())
         for workspace in workspaces:
             if str(workspace.workspace_id) == current_workspace_id:
-                container_key = self.WorkspaceKey(
+                container_key = WorkspaceKey(
                     workspace_name=workspace.workspace_name,
                     platform=ORCHESTRATOR,
                     instance=self.platform_instance,
