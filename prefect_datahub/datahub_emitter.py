@@ -265,7 +265,6 @@ class DatahubEmitter(Block):
             orchestrator=ORCHESTRATOR,
             id=flow_run_ctx.flow.name,
             cluster=self.env,
-            env=self.env,
             name=flow_run_ctx.flow.name,
             platform_instance=self.platform_instance,
         )
