@@ -1,8 +1,8 @@
 """Datahub Emitter classes used to emit prefect metadata to Datahub REST."""
 
 import asyncio
-from uuid import UUID
 from typing import Dict, List, Optional
+from uuid import UUID
 
 from datahub.api.entities.datajob import DataFlow, DataJob
 from datahub.api.entities.dataprocess.dataprocess_instance import (
@@ -18,7 +18,6 @@ from datahub.utilities.urns.dataset_urn import DatasetUrn
 from datahub_provider.entities import _Entity
 from prefect.blocks.core import Block
 from prefect.client import cloud, orchestration
-from prefect.client.schemas import TaskRun
 from prefect.context import FlowRunContext, TaskRunContext
 from prefect.settings import PREFECT_API_URL
 from pydantic import Field
@@ -311,17 +310,13 @@ class DatahubEmitter(Block):
             flow_run_id: The prefect current running flow run id.
         """
         flow_run = asyncio.run(
-            orchestration.get_client().read_flow_run(
-                flow_run_id=flow_run_id
-            )
+            orchestration.get_client().read_flow_run(flow_run_id=flow_run_id)
         )
         if self.platform_instance is not None:
             dpi_id = f"{self.platform_instance}.{flow_run.name}"
         else:
             dpi_id = flow_run.name
-        dpi = DataProcessInstance.from_dataflow(
-            dataflow=dataflow, id=dpi_id
-        )
+        dpi = DataProcessInstance.from_dataflow(dataflow=dataflow, id=dpi_id)
 
         dpi_property_bag: Dict[str, str] = {}
         allowed_flow_run_keys = [
@@ -344,9 +339,7 @@ class DatahubEmitter(Block):
 
         dpi.emit_process_start(
             emitter=self.emitter,
-            start_timestamp_millis=int(
-                flow_run.start_time.timestamp() * 1000
-            ),
+            start_timestamp_millis=int(flow_run.start_time.timestamp() * 1000),
         )
 
     def _emit_task_run(
@@ -551,5 +544,5 @@ class DatahubEmitter(Block):
             self._emit_task_run(
                 datajob=datajob,
                 flow_run_name=flow_run_ctx.flow_run.name,
-                task_run_id=node[ID]
+                task_run_id=node[ID],
             )

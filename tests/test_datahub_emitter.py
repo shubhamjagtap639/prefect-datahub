@@ -78,14 +78,16 @@ def test_emit_flow(
     mock_emitter = Mock()
     mock_emit.return_value = mock_emitter
 
-    platform_instance = 'datahub_workspace'
+    platform_instance = "datahub_workspace"
 
     datahub_emitter = DatahubEmitter(platform_instance=platform_instance)
     datahub_emitter.emit_flow()
 
     flow_run_ctx: FlowRunContext = mock_run_context[1]
 
-    expected_dataflow_urn = f"urn:li:dataFlow:(prefect,{platform_instance}.{flow_run_ctx.flow.name},prod)"
+    expected_dataflow_urn = (
+        f"urn:li:dataFlow:(prefect,{platform_instance}.{flow_run_ctx.flow.name},prod)"
+    )
 
     assert mock_emitter.method_calls[1].args[0].aspectName == "dataFlowInfo"
     assert mock_emitter.method_calls[1].args[0].entityUrn == expected_dataflow_urn
