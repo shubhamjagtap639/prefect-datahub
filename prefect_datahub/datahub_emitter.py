@@ -1,6 +1,7 @@
 """Datahub Emitter classes used to emit prefect metadata to Datahub REST."""
 
 import asyncio
+from uuid import UUID
 from typing import Dict, List, Optional
 
 from datahub.api.entities.datajob import DataFlow, DataJob
@@ -299,7 +300,7 @@ class DatahubEmitter(Block):
 
         return dataflow
 
-    def _emit_flow_run(self, dataflow: DataFlow, flow_run_ctx: FlowRunContext) -> None:
+    def _emit_flow_run(self, dataflow: DataFlow, flow_run_id: UUID) -> None:
         """
         Emit prefect flow run to datahub rest. Prefect flow run get mapped with datahub
         data process instance entity which get's generate from provided dataflow entity.
@@ -307,15 +308,19 @@ class DatahubEmitter(Block):
 
         Args:
             dataflow: The datahub dataflow entity used to create data process instance.
-            flow_run_ctx: The prefect current running flow run context.
+            flow_run_id: The prefect current running flow run id.
         """
         flow_run = asyncio.run(
             orchestration.get_client().read_flow_run(
-                flow_run_id=flow_run_ctx.flow_run.id
+                flow_run_id=flow_run_id
             )
         )
+        if self.platform_instance is not None:
+            dpi_id = f"{self.platform_instance}.{flow_run.name}"
+        else:
+            dpi_id = flow_run.name
         dpi = DataProcessInstance.from_dataflow(
-            dataflow=dataflow, id=flow_run_ctx.flow_run.name
+            dataflow=dataflow, id=dpi_id
         )
 
         dpi_property_bag: Dict[str, str] = {}
@@ -340,12 +345,12 @@ class DatahubEmitter(Block):
         dpi.emit_process_start(
             emitter=self.emitter,
             start_timestamp_millis=int(
-                flow_run_ctx.flow_run.start_time.timestamp() * 1000
+                flow_run.start_time.timestamp() * 1000
             ),
         )
 
     def _emit_task_run(
-        self, datajob: DataJob, flow_run_name: str, task_run: TaskRun
+        self, datajob: DataJob, flow_run_name: str, task_run_id: str
     ) -> None:
         """
         Emit prefect task run to datahub rest. Prefect task run get mapped with datahub
@@ -355,11 +360,16 @@ class DatahubEmitter(Block):
         Args:
             datajob: The datahub datajob entity used to create data process instance.
             flow_run_name: The prefect current running flow run name.
-            task_run: The prefect task run entity.
+            task_run_id: The prefect task run id.
         """
+        task_run = asyncio.run(orchestration.get_client().read_task_run(task_run_id))
+        if self.platform_instance is not None:
+            dpi_id = f"{self.platform_instance}.{flow_run_name}.{task_run.name}"
+        else:
+            dpi_id = f"{flow_run_name}.{task_run.name}"
         dpi = DataProcessInstance.from_datajob(
             datajob=datajob,
-            id=f"{flow_run_name}.{task_run.name}",
+            id=dpi_id,
             clone_inlets=True,
             clone_outlets=True,
         )
@@ -504,7 +514,7 @@ class DatahubEmitter(Block):
                 aspect=BrowsePathsClass(paths=[f"/prefect/prod/{workspace_name}"]),
             )
             self.emitter.emit(mcp)
-        self._emit_flow_run(dataflow, flow_run_ctx)
+        self._emit_flow_run(dataflow, flow_run_ctx.flow_run.id)
 
         # Emit task, task run and add upstream task if present for each task
         graph_json = asyncio.run(
@@ -515,19 +525,16 @@ class DatahubEmitter(Block):
             for prefect_future in flow_run_ctx.task_run_futures
         }
         for node in graph_json:
-            task_run = asyncio.run(orchestration.get_client().read_task_run(node[ID]))
-            # Emit task
             datajob_urn = DataJobUrn.create_from_ids(
                 data_flow_urn=str(dataflow.urn),
-                job_id=task_run.task_key,
+                job_id=task_run_key_map[node[ID]],
             )
             if str(datajob_urn) in self.datajobs_to_emit:
                 datajob = self.datajobs_to_emit[str(datajob_urn)]
             else:
                 datajob = self._generate_datajob(
-                    flow_run_ctx=flow_run_ctx, task_key=task_run.task_key
+                    flow_run_ctx=flow_run_ctx, task_key=task_run_key_map[node[ID]]
                 )
-            # Add upstrem urns
             for each in node[UPSTREAM_DEPENDENCIES]:
                 upstream_task_urn = DataJobUrn.create_from_ids(
                     data_flow_urn=str(dataflow.urn),
@@ -541,9 +548,8 @@ class DatahubEmitter(Block):
                     aspect=BrowsePathsClass(paths=[f"/prefect/prod/{workspace_name}"]),
                 )
                 self.emitter.emit(mcp)
-
             self._emit_task_run(
                 datajob=datajob,
                 flow_run_name=flow_run_ctx.flow_run.name,
-                task_run=task_run,
+                task_run_id=node[ID]
             )

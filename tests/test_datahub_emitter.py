@@ -78,12 +78,14 @@ def test_emit_flow(
     mock_emitter = Mock()
     mock_emit.return_value = mock_emitter
 
-    datahub_emitter = DatahubEmitter()
+    platform_instance = 'datahub_workspace'
+
+    datahub_emitter = DatahubEmitter(platform_instance=platform_instance)
     datahub_emitter.emit_flow()
 
     flow_run_ctx: FlowRunContext = mock_run_context[1]
 
-    expected_dataflow_urn = f"urn:li:dataFlow:(prefect,{flow_run_ctx.flow.name},prod)"
+    expected_dataflow_urn = f"urn:li:dataFlow:(prefect,{platform_instance}.{flow_run_ctx.flow.name},prod)"
 
     assert mock_emitter.method_calls[1].args[0].aspectName == "dataFlowInfo"
     assert mock_emitter.method_calls[1].args[0].entityUrn == expected_dataflow_urn
@@ -99,7 +101,7 @@ def test_emit_flow(
     )
     assert (
         mock_emitter.method_calls[8].args[0].entityUrn
-        == "urn:li:dataProcessInstance:1c61330602200cac15fe044b3698c176"
+        == "urn:li:dataProcessInstance:a95d24db6abd98384fc1d4c8540098a4"
     )
     assert (
         mock_emitter.method_calls[9].args[0].aspectName
@@ -107,7 +109,7 @@ def test_emit_flow(
     )
     assert (
         mock_emitter.method_calls[9].args[0].entityUrn
-        == "urn:li:dataProcessInstance:1c61330602200cac15fe044b3698c176"
+        == "urn:li:dataProcessInstance:a95d24db6abd98384fc1d4c8540098a4"
     )
     assert (
         mock_emitter.method_calls[10].args[0].aspectName
@@ -115,37 +117,32 @@ def test_emit_flow(
     )
     assert (
         mock_emitter.method_calls[10].args[0].entityUrn
-        == "urn:li:dataProcessInstance:1c61330602200cac15fe044b3698c176"
+        == "urn:li:dataProcessInstance:a95d24db6abd98384fc1d4c8540098a4"
     )
     assert mock_emitter.method_calls[11].args[0].aspectName == "dataJobInfo"
     assert (
         mock_emitter.method_calls[11].args[0].entityUrn
-        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,"
-        f"{flow_run_ctx.flow.name},prod),__main__.extract)"
+        == f"urn:li:dataJob:({expected_dataflow_urn},__main__.extract)"
     )
     assert mock_emitter.method_calls[12].args[0].aspectName == "dataJobInputOutput"
     assert (
         mock_emitter.method_calls[12].args[0].entityUrn
-        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,"
-        f"{flow_run_ctx.flow.name},prod),__main__.extract)"
+        == f"urn:li:dataJob:({expected_dataflow_urn},__main__.extract)"
     )
     assert mock_emitter.method_calls[13].args[0].aspectName == "ownership"
     assert (
         mock_emitter.method_calls[13].args[0].entityUrn
-        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,"
-        f"{flow_run_ctx.flow.name},prod),__main__.extract)"
+        == f"urn:li:dataJob:({expected_dataflow_urn},__main__.extract)"
     )
     assert mock_emitter.method_calls[14].args[0].aspectName == "globalTags"
     assert (
         mock_emitter.method_calls[14].args[0].entityUrn
-        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,"
-        f"{flow_run_ctx.flow.name},prod),__main__.extract)"
+        == f"urn:li:dataJob:({expected_dataflow_urn},__main__.extract)"
     )
     assert mock_emitter.method_calls[15].args[0].aspectName == "browsePaths"
     assert (
         mock_emitter.method_calls[15].args[0].entityUrn
-        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,"
-        f"{flow_run_ctx.flow.name},prod),__main__.extract)"
+        == f"urn:li:dataJob:({expected_dataflow_urn},__main__.extract)"
     )
     assert (
         mock_emitter.method_calls[16].args[0].aspectName
@@ -153,7 +150,7 @@ def test_emit_flow(
     )
     assert (
         mock_emitter.method_calls[16].args[0].entityUrn
-        == "urn:li:dataProcessInstance:77a8ea575ff6976d37cd1a60caf98a95"
+        == "urn:li:dataProcessInstance:bf5eab177af0097bbff6a41694f39af9"
     )
     assert (
         mock_emitter.method_calls[17].args[0].aspectName
@@ -161,7 +158,7 @@ def test_emit_flow(
     )
     assert (
         mock_emitter.method_calls[17].args[0].entityUrn
-        == "urn:li:dataProcessInstance:77a8ea575ff6976d37cd1a60caf98a95"
+        == "urn:li:dataProcessInstance:bf5eab177af0097bbff6a41694f39af9"
     )
     assert (
         mock_emitter.method_calls[18].args[0].aspectName
@@ -169,7 +166,7 @@ def test_emit_flow(
     )
     assert (
         mock_emitter.method_calls[18].args[0].entityUrn
-        == "urn:li:dataProcessInstance:77a8ea575ff6976d37cd1a60caf98a95"
+        == "urn:li:dataProcessInstance:bf5eab177af0097bbff6a41694f39af9"
     )
     assert (
         mock_emitter.method_calls[19].args[0].aspectName
@@ -177,37 +174,32 @@ def test_emit_flow(
     )
     assert (
         mock_emitter.method_calls[19].args[0].entityUrn
-        == "urn:li:dataProcessInstance:77a8ea575ff6976d37cd1a60caf98a95"
+        == "urn:li:dataProcessInstance:bf5eab177af0097bbff6a41694f39af9"
     )
     assert mock_emitter.method_calls[20].args[0].aspectName == "dataJobInfo"
     assert (
         mock_emitter.method_calls[20].args[0].entityUrn
-        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,"
-        f"{flow_run_ctx.flow.name},prod),__main__.load)"
+        == f"urn:li:dataJob:({expected_dataflow_urn},__main__.load)"
     )
     assert mock_emitter.method_calls[21].args[0].aspectName == "dataJobInputOutput"
     assert (
         mock_emitter.method_calls[21].args[0].entityUrn
-        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,"
-        f"{flow_run_ctx.flow.name},prod),__main__.load)"
+        == f"urn:li:dataJob:({expected_dataflow_urn},__main__.load)"
     )
     assert mock_emitter.method_calls[22].args[0].aspectName == "ownership"
     assert (
         mock_emitter.method_calls[22].args[0].entityUrn
-        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,"
-        f"{flow_run_ctx.flow.name},prod),__main__.load)"
+        == f"urn:li:dataJob:({expected_dataflow_urn},__main__.load)"
     )
     assert mock_emitter.method_calls[23].args[0].aspectName == "globalTags"
     assert (
         mock_emitter.method_calls[23].args[0].entityUrn
-        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,"
-        f"{flow_run_ctx.flow.name},prod),__main__.load)"
+        == f"urn:li:dataJob:({expected_dataflow_urn},__main__.load)"
     )
     assert mock_emitter.method_calls[24].args[0].aspectName == "browsePaths"
     assert (
         mock_emitter.method_calls[24].args[0].entityUrn
-        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,"
-        f"{flow_run_ctx.flow.name},prod),__main__.load)"
+        == f"urn:li:dataJob:({expected_dataflow_urn},__main__.load)"
     )
     assert (
         mock_emitter.method_calls[25].args[0].aspectName
@@ -215,7 +207,7 @@ def test_emit_flow(
     )
     assert (
         mock_emitter.method_calls[25].args[0].entityUrn
-        == "urn:li:dataProcessInstance:6efec88dd6d26cb85e8592baf38e42b9"
+        == "urn:li:dataProcessInstance:095673536b61e6f25c7691af0d2cc317"
     )
     assert (
         mock_emitter.method_calls[26].args[0].aspectName
@@ -223,7 +215,7 @@ def test_emit_flow(
     )
     assert (
         mock_emitter.method_calls[26].args[0].entityUrn
-        == "urn:li:dataProcessInstance:6efec88dd6d26cb85e8592baf38e42b9"
+        == "urn:li:dataProcessInstance:095673536b61e6f25c7691af0d2cc317"
     )
     assert (
         mock_emitter.method_calls[27].args[0].aspectName
@@ -231,7 +223,7 @@ def test_emit_flow(
     )
     assert (
         mock_emitter.method_calls[27].args[0].entityUrn
-        == "urn:li:dataProcessInstance:6efec88dd6d26cb85e8592baf38e42b9"
+        == "urn:li:dataProcessInstance:095673536b61e6f25c7691af0d2cc317"
     )
     assert (
         mock_emitter.method_calls[28].args[0].aspectName
@@ -239,37 +231,32 @@ def test_emit_flow(
     )
     assert (
         mock_emitter.method_calls[28].args[0].entityUrn
-        == "urn:li:dataProcessInstance:6efec88dd6d26cb85e8592baf38e42b9"
+        == "urn:li:dataProcessInstance:095673536b61e6f25c7691af0d2cc317"
     )
     assert mock_emitter.method_calls[29].args[0].aspectName == "dataJobInfo"
     assert (
         mock_emitter.method_calls[29].args[0].entityUrn
-        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,"
-        f"{flow_run_ctx.flow.name},prod),__main__.transform)"
+        == f"urn:li:dataJob:({expected_dataflow_urn},__main__.transform)"
     )
     assert mock_emitter.method_calls[30].args[0].aspectName == "dataJobInputOutput"
     assert (
         mock_emitter.method_calls[30].args[0].entityUrn
-        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,"
-        f"{flow_run_ctx.flow.name},prod),__main__.transform)"
+        == f"urn:li:dataJob:({expected_dataflow_urn},__main__.transform)"
     )
     assert mock_emitter.method_calls[31].args[0].aspectName == "ownership"
     assert (
         mock_emitter.method_calls[31].args[0].entityUrn
-        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,"
-        f"{flow_run_ctx.flow.name},prod),__main__.transform)"
+        == f"urn:li:dataJob:({expected_dataflow_urn},__main__.transform)"
     )
     assert mock_emitter.method_calls[32].args[0].aspectName == "globalTags"
     assert (
         mock_emitter.method_calls[32].args[0].entityUrn
-        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,"
-        f"{flow_run_ctx.flow.name},prod),__main__.transform)"
+        == f"urn:li:dataJob:({expected_dataflow_urn},__main__.transform)"
     )
     assert mock_emitter.method_calls[33].args[0].aspectName == "browsePaths"
     assert (
         mock_emitter.method_calls[33].args[0].entityUrn
-        == f"urn:li:dataJob:(urn:li:dataFlow:(prefect,"
-        f"{flow_run_ctx.flow.name},prod),__main__.transform)"
+        == f"urn:li:dataJob:({expected_dataflow_urn},__main__.transform)"
     )
     assert (
         mock_emitter.method_calls[34].args[0].aspectName
@@ -277,7 +264,7 @@ def test_emit_flow(
     )
     assert (
         mock_emitter.method_calls[34].args[0].entityUrn
-        == "urn:li:dataProcessInstance:c4458dec616b26ad64e2c520614ef6b7"
+        == "urn:li:dataProcessInstance:04ba0f8064b2c45f69da571c434f1c69"
     )
     assert (
         mock_emitter.method_calls[35].args[0].aspectName
@@ -285,7 +272,7 @@ def test_emit_flow(
     )
     assert (
         mock_emitter.method_calls[35].args[0].entityUrn
-        == "urn:li:dataProcessInstance:c4458dec616b26ad64e2c520614ef6b7"
+        == "urn:li:dataProcessInstance:04ba0f8064b2c45f69da571c434f1c69"
     )
     assert (
         mock_emitter.method_calls[36].args[0].aspectName
@@ -293,7 +280,7 @@ def test_emit_flow(
     )
     assert (
         mock_emitter.method_calls[36].args[0].entityUrn
-        == "urn:li:dataProcessInstance:c4458dec616b26ad64e2c520614ef6b7"
+        == "urn:li:dataProcessInstance:04ba0f8064b2c45f69da571c434f1c69"
     )
     assert (
         mock_emitter.method_calls[37].args[0].aspectName
@@ -301,5 +288,5 @@ def test_emit_flow(
     )
     assert (
         mock_emitter.method_calls[37].args[0].entityUrn
-        == "urn:li:dataProcessInstance:c4458dec616b26ad64e2c520614ef6b7"
+        == "urn:li:dataProcessInstance:04ba0f8064b2c45f69da571c434f1c69"
     )
