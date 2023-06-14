@@ -87,7 +87,9 @@ def test_emit_flow(
     task_run_ctx: TaskRunContext = mock_run_context[0]
     flow_run_ctx: FlowRunContext = mock_run_context[1]
 
-    expected_dataflow_urn = f"urn:li:dataFlow:(prefect,{flow_run_ctx.flow.name},prod)"
+    expected_dataflow_urn = (
+        f"urn:li:dataFlow:(prefect,{platform_instance}.{flow_run_ctx.flow.name},prod)"
+    )
 
     assert mock_emitter.method_calls[1].args[0].aspectName == "dataFlowInfo"
     assert mock_emitter.method_calls[1].args[0].entityUrn == expected_dataflow_urn
