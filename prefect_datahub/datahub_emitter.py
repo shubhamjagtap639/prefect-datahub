@@ -1,6 +1,7 @@
 """Datahub Emitter classes used to emit prefect metadata to Datahub REST."""
 
 import asyncio
+import traceback
 from typing import Dict, List, Optional
 from uuid import UUID
 
@@ -16,6 +17,7 @@ from datahub.utilities.urns.data_flow_urn import DataFlowUrn
 from datahub.utilities.urns.data_job_urn import DataJobUrn
 from datahub.utilities.urns.dataset_urn import DatasetUrn
 from datahub_provider.entities import _Entity
+from prefect import get_run_logger
 from prefect.blocks.core import Block
 from prefect.client import cloud, orchestration
 from prefect.context import FlowRunContext, TaskRunContext
@@ -160,8 +162,13 @@ class DatahubEmitter(Block):
         try:
             asyncio.run(cloud.get_cloud_client().api_healthcheck())
         except Exception:
+            get_run_logger().debug(traceback.format_exc())
             return None
         if "workspaces" not in PREFECT_API_URL.value():
+            get_run_logger().debug(
+                "Cannot fetch workspace name. Please login to prefect cloud using "
+                "command 'prefect cloud login'."
+            )
             return None
         current_workspace_id = PREFECT_API_URL.value().split("/")[-1]
         workspaces = asyncio.run(cloud.get_cloud_client().read_workspaces())
@@ -264,7 +271,6 @@ class DatahubEmitter(Block):
         dataflow = DataFlow(
             orchestrator=ORCHESTRATOR,
             id=flow_run_ctx.flow.name,
-            cluster=self.env,
             env=self.env,
             name=flow_run_ctx.flow.name,
             platform_instance=self.platform_instance,
@@ -505,7 +511,9 @@ class DatahubEmitter(Block):
         if workspace_name is not None:
             mcp = MetadataChangeProposalWrapper(
                 entityUrn=str(dataflow.urn),
-                aspect=BrowsePathsClass(paths=[f"/prefect/prod/{workspace_name}"]),
+                aspect=BrowsePathsClass(
+                    paths=[f"/{ORCHESTRATOR}/{self.env}/{workspace_name}"]
+                ),
             )
             self.emitter.emit(mcp)
         self._emit_flow_run(dataflow, flow_run_ctx.flow_run.id)
@@ -539,7 +547,9 @@ class DatahubEmitter(Block):
             if workspace_name is not None:
                 mcp = MetadataChangeProposalWrapper(
                     entityUrn=str(datajob.urn),
-                    aspect=BrowsePathsClass(paths=[f"/prefect/prod/{workspace_name}"]),
+                    aspect=BrowsePathsClass(
+                        paths=[f"/{ORCHESTRATOR}/{self.env}/{workspace_name}"]
+                    ),
                 )
                 self.emitter.emit(mcp)
             self._emit_task_run(
