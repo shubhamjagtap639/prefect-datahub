@@ -13,12 +13,12 @@ with open("README.md") as readme_file:
 
 setup(
     name="prefect-datahub",
-    description="Block used to emit prefect task and flow related metadata to Datahub REST",
+    description="Metadata emitter for datahub",
     license="Apache License 2.0",
-    author="Shubham Jagtap",
+    author="Acryl Data",
     author_email="shubham.jagtap@gslab.com",
     keywords="prefect",
-    url="https://github.com/shubhamjagtap639/prefect-datahub",
+    url="https://github.com/PrefectHQ/prefect-datahub",
     long_description=readme,
     long_description_content_type="text/markdown",
     version=versioneer.get_version(),

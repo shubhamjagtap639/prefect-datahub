@@ -4,12 +4,12 @@
   "checkout": null,
   "context": {
     "cookiecutter": {
-      "full_name": "Shubham Jagtap",
+      "full_name": "Arcyl Data",
       "email": "shubham.jagtap@gslab.com",
-      "github_organization": "shubhamjagtap639",
+      "github_organization": "PrefectHQ",
       "collection_name": "prefect-datahub",
       "collection_slug": "prefect_datahub",
-      "collection_short_description": "Block used to emit prefect task and flow related metadata to Datahub REST",
+      "collection_short_description": "Metadata emitter for datahub",
       "_copy_without_render": [
         ".github/workflows/*.yml"
       ],

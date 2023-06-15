@@ -20,6 +20,8 @@ from datahub_provider.entities import _Entity
 from prefect import get_run_logger
 from prefect.blocks.core import Block
 from prefect.client import cloud, orchestration
+from prefect.client.schemas import FlowRun, TaskRun, Workspace
+from prefect.client.schemas.objects import Flow
 from prefect.context import FlowRunContext, TaskRunContext
 from prefect.settings import PREFECT_API_URL
 from pydantic import Field
@@ -136,7 +138,7 @@ class DatahubEmitter(Block):
         Initialize datahub rest emitter
         """
         super().__init__(*args, **kwargs)
-        self.datajobs_to_emit = {}
+        self.datajobs_to_emit: Dict[str, DataJob] = {}
         self.emitter = DatahubRestEmitter(gms_server=self.datahub_rest_url)
         self.emitter.test_connection()
 
@@ -145,7 +147,7 @@ class DatahubEmitter(Block):
         Convert list of _entity to list of dataser urn
 
         Args:
-            iolets: The list of entities.
+            iolets (list[_Entity]): The list of entities.
 
         Returns:
             The list of Dataset URN.
@@ -171,18 +173,20 @@ class DatahubEmitter(Block):
             )
             return None
         current_workspace_id = PREFECT_API_URL.value().split("/")[-1]
-        workspaces = asyncio.run(cloud.get_cloud_client().read_workspaces())
+        workspaces: List[Workspace] = asyncio.run(
+            cloud.get_cloud_client().read_workspaces()
+        )
         for workspace in workspaces:
             if str(workspace.workspace_id) == current_workspace_id:
                 return workspace.workspace_name
         return None
 
-    async def _get_flow_run_graph(self, flow_run_id) -> List[Dict]:
+    async def _get_flow_run_graph(self, flow_run_id: str) -> List[Dict]:
         """
         Fetch the flow run graph for provided flow run id
 
         Args:
-            flow_run_id: The flow run id.
+            flow_run_id (str): The flow run id.
 
         Returns:
             The flow run graph in json format.
@@ -203,9 +207,10 @@ class DatahubEmitter(Block):
         Assign description, tags, and properties to created datajob.
 
         Args:
-            flow_run_ctx: The prefect current running flow run context.
-            task_run_ctx: The prefect current running task run context.
-            task_key: The task key.
+            flow_run_ctx (FlowRunContext): The prefect current running flow run context.
+            task_run_ctx (Optional[TaskRunContext]): The prefect current running task \
+                run context.
+            task_key (Optional[str]): The task key.
 
         Returns:
             The datajob entity.
@@ -260,12 +265,12 @@ class DatahubEmitter(Block):
         Assign description, tags, and properties to created dataflow.
 
         Args:
-            flow_run_ctx: The prefect current running flow run context.
+            flow_run_ctx (FlowRunContext): The prefect current running flow run context.
 
         Returns:
             The dataflow entity.
         """
-        flow = asyncio.run(
+        flow: Flow = asyncio.run(
             orchestration.get_client().read_flow(flow_id=flow_run_ctx.flow_run.flow_id)
         )
         dataflow = DataFlow(
@@ -312,10 +317,11 @@ class DatahubEmitter(Block):
         Assign flow run properties to data process instance properties.
 
         Args:
-            dataflow: The datahub dataflow entity used to create data process instance.
-            flow_run_id: The prefect current running flow run id.
+            dataflow (DataFlow): The datahub dataflow entity used to create \
+                data process instance.
+            flow_run_id (UUID): The prefect current running flow run id.
         """
-        flow_run = asyncio.run(
+        flow_run: FlowRun = asyncio.run(
             orchestration.get_client().read_flow_run(flow_run_id=flow_run_id)
         )
         if self.platform_instance is not None:
@@ -357,11 +363,14 @@ class DatahubEmitter(Block):
         Assign task run properties to data process instance properties.
 
         Args:
-            datajob: The datahub datajob entity used to create data process instance.
-            flow_run_name: The prefect current running flow run name.
-            task_run_id: The prefect task run id.
+            datajob (DataJob): The datahub datajob entity used to create \
+                data process instance.
+            flow_run_name (str): The prefect current running flow run name.
+            task_run_id (str): The prefect task run id.
         """
-        task_run = asyncio.run(orchestration.get_client().read_task_run(task_run_id))
+        task_run: TaskRun = asyncio.run(
+            orchestration.get_client().read_task_run(task_run_id)
+        )
         if self.platform_instance is not None:
             dpi_id = f"{self.platform_instance}.{flow_run_name}.{task_run.name}"
         else:
@@ -431,8 +440,8 @@ class DatahubEmitter(Block):
         and outlets respectively.
 
         Args:
-            inputs (list): The list of task inputs.
-            outputs (list): The list of task outputs.
+            inputs (Optional[list]): The list of task inputs.
+            outputs (Optional[list]): The list of task outputs.
 
         Example:
             Emit the task metadata as show below:
