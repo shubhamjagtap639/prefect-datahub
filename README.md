@@ -1,4 +1,4 @@
-# Emit flows & tasks metadata to datahub rest with `prefect-datahub`
+# Emit flows & tasks metadata to DataHub rest with `prefect-datahub`
 
 <p align="center">
     <!--- Insert a cover image here -->
@@ -20,28 +20,28 @@
 
 ## Welcome!
 
-The `prefect-datahub` collection makes it easy to leverage the capabilities of datahub emitter in your flows, featuring support for ingesting metadata of flows, tasks & workspace to datahub gms rest.
+The `prefect-datahub` collection makes it easy to leverage the capabilities of DataHub emitter in your flows, featuring support for ingesting metadata of flows, tasks & workspace to DataHub gms rest.
 
 
 ## Getting Started
 
-### Setup Datahub UI
+### Setup DataHub UI
 
-In order to use 'prefect-datahub' collection, you'll first need to deploy the new instance of Datahub. 
+In order to use 'prefect-datahub' collection, you'll first need to deploy the new instance of DataHub. 
 
-You can get the instructions on deploying the open source Datahub locally by navigating to the [apps page](https://datahubproject.io/docs/quickstart).
+You can get the instructions on deploying the open source DataHub by navigating to the [apps page](https://datahubproject.io/docs/quickstart).
 
-Successful deployment of Datahub locally will lead creation of datahub GMS service running on 'http://localhost:8080'.
+Successful deployment of DataHub will lead creation of DataHub GMS service running on 'http://localhost:8080' if you have deployed it on local system.
 
 ### Saving configurations to a block
 
 
 This is a one-time activity, where you can save the configuration on the [Prefect block document store](https://docs.prefect.io/2.10.13/concepts/blocks/#saving-blocks).
-While saving you can provide below configutions. Default value will get set if not provided while saving the configuration to block.
+While saving you can provide below configurations. Default value will get set if not provided while saving the configuration to block.
 
 Config | Type | Default | Description
 --- | --- | --- | ---
-datahub_rest_url | `str` | *http://localhost:8080* | Datahub GMS Rest url
+datahub_rest_url | `str` | *http://localhost:8080* | DataHub GMS REST URL
 env | `str` | *PROD* | The environment that all assets produced by this orchestrator belong to. For more detail and possible values refer [here](https://datahubproject.io/docs/graphql/enums/#fabrictype).
 platform_instance | `str` | *None* | The instance of the platform that all assets produced by this recipe belong to. For more detail please refer [here](https://datahubproject.io/docs/platform-instances/).
 
@@ -54,7 +54,7 @@ DatahubEmitter(
 ).save("BLOCK-NAME-PLACEHOLDER")
 ```
 
-Congrats! You can now load the saved block to use your credentials in your Python code:
+Congrats! You can now load the saved block to use your credentials in your Flow code:
  
 ```python
 from prefect_datahub import DatahubEmitter
