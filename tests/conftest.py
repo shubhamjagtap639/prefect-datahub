@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 from unittest.mock import MagicMock, patch
 from uuid import UUID
 
@@ -389,7 +390,16 @@ async def mock_task_run_future():
 
 
 @pytest.fixture(scope="module")
-def mock_run_context():
+def mock_run_logger():
+    with patch(
+        "prefect_datahub.datahub_emitter.get_run_logger",
+        return_value=logging.getLogger(),
+    ) as mock_logger:
+        yield mock_logger
+
+
+@pytest.fixture(scope="module")
+def mock_run_context(mock_run_logger):
     task_run_ctx = MagicMock()
     task_run_ctx.task.task_key = mock_transform_task_json["task_key"]
     task_run_ctx.task.name = mock_transform_task_json["name"]

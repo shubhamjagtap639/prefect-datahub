@@ -54,7 +54,7 @@ DatahubEmitter(
 ).save("BLOCK-NAME-PLACEHOLDER")
 ```
 
-Congrats! You can now load the saved block to use your credentials in your Flow code:
+Congrats! You can now load the saved block to use your configurations in your Flow code:
  
 ```python
 from prefect_datahub import DatahubEmitter
@@ -71,7 +71,9 @@ DatahubEmitter.load("BLOCK-NAME-PLACEHOLDER")
     prefect block register -m prefect_datahub
     ```
 
-After installing `prefect-datahub` and [saving the configution](#saving-configurations-to-block), you can easily use it within your flows to help you emit metadata as show below!
+### Load the saved block in prefect workflows
+
+After installing `prefect-datahub` and [saving the configution](#saving-configurations-to-a-block), you can easily use it within your prefect workflows to help you emit metadata event as show below!
 
 ```python
 from datahub_provider.entities import Dataset
@@ -95,6 +97,8 @@ def etl():
     data = transform("This is data")
     datahub_emitter.emit_flow()
 ```
+
+**Note**: To emit the tasks, user compulsory need to emit flow. Otherwise nothing will get emit.
 
 ## Resources
 

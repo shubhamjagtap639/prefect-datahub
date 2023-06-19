@@ -108,7 +108,7 @@ class DatahubEmitter(Block):
 
     _block_type_name = "datahub emitter"
     # replace this with a relevant logo; defaults to Prefect logo
-    _logo_url = "https://images.ctfassets.net/gm98wzqotmnx/08yCE6xpJMX9Kjl5VArDS/c2ede674c20f90b9b6edeab71feffac9/prefect-200x200.png?h=250"  # noqa
+    _logo_url = "https://datahubproject.io/img/datahub-logo-color-mark.svg"  # noqa
     _documentation_url = "https://shubhamjagtap639.github.io/prefect-datahub/datahub_emitter/#prefect-datahub.datahub_emitter.DatahubEmitter"  # noqa
 
     datahub_rest_url: Optional[str] = Field(
@@ -195,6 +195,22 @@ class DatahubEmitter(Block):
             f"/flow_runs/{flow_run_id}/graph"
         )
         return response.json()
+
+    def _emit_browsepath(self, urn: str, workspace_name: str) -> None:
+        """
+        Emit browsepath for provided urn. Set path as orchestrator/env/workspace_name.
+
+        Args:
+            urn (str): The entity URN
+            workspace_name (str): The prefect cloud workspace name
+        """
+        mcp = MetadataChangeProposalWrapper(
+            entityUrn=urn,
+            aspect=BrowsePathsClass(
+                paths=[f"/{ORCHESTRATOR}/{self.env}/{workspace_name}"]
+            ),
+        )
+        self.emitter.emit(mcp)
 
     def _generate_datajob(
         self,
@@ -309,6 +325,58 @@ class DatahubEmitter(Block):
         dataflow.properties = flow_property_bag
 
         return dataflow
+
+    def _emit_tasks(
+        self,
+        flow_run_ctx: FlowRunContext,
+        dataflow: DataFlow,
+        workspace_name: Optional[str] = None,
+    ):
+        """
+        Emit prefect tasks metadata to datahub rest. Add upstream dependencies if
+        present for each task.
+
+        Args:
+            flow_run_ctx (FlowRunContext): The prefect current running flow run context
+            dataflow (DataFlow): The datahub dataflow entity.
+            workspace_name Optional(str): The prefect cloud workpace name.
+        """
+        graph_json = asyncio.run(
+            self._get_flow_run_graph(str(flow_run_ctx.flow_run.id))
+        )
+        task_run_key_map = {
+            str(prefect_future.task_run.id): prefect_future.task_run.task_key
+            for prefect_future in flow_run_ctx.task_run_futures
+        }
+        if graph_json:
+            get_run_logger().info("Emitting tasks to datahub...")
+        for node in graph_json:
+            datajob_urn = DataJobUrn.create_from_ids(
+                data_flow_urn=str(dataflow.urn),
+                job_id=task_run_key_map[node[ID]],
+            )
+            if str(datajob_urn) in self.datajobs_to_emit:
+                datajob = self.datajobs_to_emit[str(datajob_urn)]
+            else:
+                datajob = self._generate_datajob(
+                    flow_run_ctx=flow_run_ctx, task_key=task_run_key_map[node[ID]]
+                )
+            for each in node[UPSTREAM_DEPENDENCIES]:
+                upstream_task_urn = DataJobUrn.create_from_ids(
+                    data_flow_urn=str(dataflow.urn),
+                    job_id=task_run_key_map[each[ID]],
+                )
+                datajob.upstream_urns.extend([upstream_task_urn])
+            datajob.emit(self.emitter)
+
+            if workspace_name is not None:
+                self._emit_browsepath(str(datajob.urn), workspace_name)
+
+            self._emit_task_run(
+                datajob=datajob,
+                flow_run_name=flow_run_ctx.flow_run.name,
+                task_run_id=node[ID],
+            )
 
     def _emit_flow_run(self, dataflow: DataFlow, flow_run_id: UUID) -> None:
         """
@@ -485,11 +553,9 @@ class DatahubEmitter(Block):
     def emit_flow(self) -> None:
         """
         Emit prefect current running flow metadata to datahub rest. Prefect flow gets
-        mapped with datahub dataflow entity. Add upstream dependencies if present for
-        each task. Emit the prefect task run metadata as well. If the user hasn't
-        called add_task in the task function still emit_flow will emit a task but
-        without task name, description,tags and properties.
-        Emit the prefect workspace metadata as well.
+        mapped with datahub dataflow entity. If the user hasn't called add_task in
+        the task function still emit_flow will emit a task but without task name,
+        description,tags and properties.
 
 
         Example:
@@ -516,53 +582,10 @@ class DatahubEmitter(Block):
 
         # Emit flow and flow run
         dataflow = self._generate_dataflow(flow_run_ctx=flow_run_ctx)
+        get_run_logger().info("Emitting flow to datahub...")
         dataflow.emit(self.emitter)
         if workspace_name is not None:
-            mcp = MetadataChangeProposalWrapper(
-                entityUrn=str(dataflow.urn),
-                aspect=BrowsePathsClass(
-                    paths=[f"/{ORCHESTRATOR}/{self.env}/{workspace_name}"]
-                ),
-            )
-            self.emitter.emit(mcp)
+            self._emit_browsepath(str(dataflow.urn), workspace_name)
         self._emit_flow_run(dataflow, flow_run_ctx.flow_run.id)
 
-        # Emit task, task run and add upstream task if present for each task
-        graph_json = asyncio.run(
-            self._get_flow_run_graph(str(flow_run_ctx.flow_run.id))
-        )
-        task_run_key_map = {
-            str(prefect_future.task_run.id): prefect_future.task_run.task_key
-            for prefect_future in flow_run_ctx.task_run_futures
-        }
-        for node in graph_json:
-            datajob_urn = DataJobUrn.create_from_ids(
-                data_flow_urn=str(dataflow.urn),
-                job_id=task_run_key_map[node[ID]],
-            )
-            if str(datajob_urn) in self.datajobs_to_emit:
-                datajob = self.datajobs_to_emit[str(datajob_urn)]
-            else:
-                datajob = self._generate_datajob(
-                    flow_run_ctx=flow_run_ctx, task_key=task_run_key_map[node[ID]]
-                )
-            for each in node[UPSTREAM_DEPENDENCIES]:
-                upstream_task_urn = DataJobUrn.create_from_ids(
-                    data_flow_urn=str(dataflow.urn),
-                    job_id=task_run_key_map[each[ID]],
-                )
-                datajob.upstream_urns.extend([upstream_task_urn])
-            datajob.emit(self.emitter)
-            if workspace_name is not None:
-                mcp = MetadataChangeProposalWrapper(
-                    entityUrn=str(datajob.urn),
-                    aspect=BrowsePathsClass(
-                        paths=[f"/{ORCHESTRATOR}/{self.env}/{workspace_name}"]
-                    ),
-                )
-                self.emitter.emit(mcp)
-            self._emit_task_run(
-                datajob=datajob,
-                flow_run_name=flow_run_ctx.flow_run.name,
-                task_run_id=node[ID],
-            )
+        self._emit_tasks(flow_run_ctx, dataflow, workspace_name)
