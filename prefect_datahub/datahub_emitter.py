@@ -181,7 +181,7 @@ class DatahubEmitter(Block):
                 return workspace.workspace_name
         return None
 
-    async def _get_flow_run_graph(self, flow_run_id: str) -> List[Dict]:
+    async def _get_flow_run_graph(self, flow_run_id: str) -> Optional[List[Dict]]:
         """
         Fetch the flow run graph for provided flow run id
 
@@ -191,9 +191,13 @@ class DatahubEmitter(Block):
         Returns:
             The flow run graph in json format.
         """
-        response = await orchestration.get_client()._client.get(
-            f"/flow_runs/{flow_run_id}/graph"
-        )
+        try:
+            response = await orchestration.get_client()._client.get(
+                f"/flow_runs/{flow_run_id}/graph"
+            )
+        except Exception:
+            get_run_logger().debug(traceback.format_exc())
+            return None
         return response.json()
 
     def _emit_browsepath(self, urn: str, workspace_name: str) -> None:
@@ -275,7 +279,7 @@ class DatahubEmitter(Block):
             return datajob
         return None
 
-    def _generate_dataflow(self, flow_run_ctx: FlowRunContext) -> DataFlow:
+    def _generate_dataflow(self, flow_run_ctx: FlowRunContext) -> Optional[DataFlow]:
         """
         Create dataflow entity using flow run ctx.
         Assign description, tags, and properties to created dataflow.
@@ -286,9 +290,17 @@ class DatahubEmitter(Block):
         Returns:
             The dataflow entity.
         """
-        flow: Flow = asyncio.run(
-            orchestration.get_client().read_flow(flow_id=flow_run_ctx.flow_run.flow_id)
-        )
+        try:
+            flow: Flow = asyncio.run(
+                orchestration.get_client().read_flow(
+                    flow_id=flow_run_ctx.flow_run.flow_id
+                )
+            )
+        except Exception:
+            get_run_logger().debug(traceback.format_exc())
+            return None
+        assert flow
+
         dataflow = DataFlow(
             orchestrator=ORCHESTRATOR,
             id=flow_run_ctx.flow.name,
@@ -331,7 +343,7 @@ class DatahubEmitter(Block):
         flow_run_ctx: FlowRunContext,
         dataflow: DataFlow,
         workspace_name: Optional[str] = None,
-    ):
+    ) -> None:
         """
         Emit prefect tasks metadata to datahub rest. Add upstream dependencies if
         present for each task.
@@ -344,6 +356,9 @@ class DatahubEmitter(Block):
         graph_json = asyncio.run(
             self._get_flow_run_graph(str(flow_run_ctx.flow_run.id))
         )
+        if graph_json is None:
+            return
+
         task_run_key_map = {
             str(prefect_future.task_run.id): prefect_future.task_run.task_key
             for prefect_future in flow_run_ctx.task_run_futures
@@ -389,9 +404,15 @@ class DatahubEmitter(Block):
                 data process instance.
             flow_run_id (UUID): The prefect current running flow run id.
         """
-        flow_run: FlowRun = asyncio.run(
-            orchestration.get_client().read_flow_run(flow_run_id=flow_run_id)
-        )
+        try:
+            flow_run: FlowRun = asyncio.run(
+                orchestration.get_client().read_flow_run(flow_run_id=flow_run_id)
+            )
+        except Exception:
+            get_run_logger().debug(traceback.format_exc())
+            return
+        assert flow_run
+
         if self.platform_instance is not None:
             dpi_id = f"{self.platform_instance}.{flow_run.name}"
         else:
@@ -436,9 +457,15 @@ class DatahubEmitter(Block):
             flow_run_name (str): The prefect current running flow run name.
             task_run_id (str): The prefect task run id.
         """
-        task_run: TaskRun = asyncio.run(
-            orchestration.get_client().read_task_run(task_run_id)
-        )
+        try:
+            task_run: TaskRun = asyncio.run(
+                orchestration.get_client().read_task_run(task_run_id)
+            )
+        except Exception:
+            get_run_logger().debug(traceback.format_exc())
+            return
+        assert task_run
+
         if self.platform_instance is not None:
             dpi_id = f"{self.platform_instance}.{flow_run_name}.{task_run.name}"
         else:
