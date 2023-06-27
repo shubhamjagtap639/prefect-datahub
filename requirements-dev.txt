@@ -13,4 +13,3 @@ mkdocs-gen-files
 interrogate
 coverage
 pillow
-python-resources
